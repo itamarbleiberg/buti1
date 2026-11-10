@@ -9,6 +9,7 @@ import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.gui.CharacterMenuScreen;
 import com.playercharacters.gui.CharacterPickerScreen;
 import com.playercharacters.render.CharacterRenderState;
@@ -47,19 +48,20 @@ import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Starts the real game, makes a world, and checks the mod end to end: the four 3D example characters and a skin
- * character on another player (armor hidden, held item and name tag kept), talking jaws and mouths, farts (typed
- * in chat, and spoken through Simple Voice Chat when it is installed), both key binds and the menus.
- * Screenshots end up in run/screenshots.
+ * Starts the real game, makes a world, and checks the mod end to end: the eight 3D example characters and a skin
+ * character on another player (armor hidden, held item and name tag kept), talking jaws and mouths, farts and the
+ * middle finger (typed in chat, and spoken through Simple Voice Chat when it is installed), both key binds and the
+ * menus. Screenshots end up in run/screenshots.
  * <p>
- * Optional system properties: {@code playercharacters.test.speechClips}, a folder with p2_com.wav (a sentence with
- * "fart") and n1_com.wav (one with "farm"), 48 kHz mono; {@code playercharacters.test.v2jar}, the jar of version 2,
- * to check that a characters folder made by it is brought up to date.
+ * Optional system properties: {@code playercharacters.test.speechClips}, a folder with fart_sentence.wav,
+ * farm_sentence.wav, fuck_you_sentence.wav and thank_you_sentence.wav (48 kHz mono);
+ * {@code playercharacters.test.v2jar} and {@code playercharacters.test.v3jar}, older jars of the mod, to check that
+ * characters folders made by them are brought up to date.
  */
 @SuppressWarnings("UnstableApiUsage")
 public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 	private static final UUID FRIEND = UUID.fromString("5f1a6c3e-1111-4222-8333-00000000f00d");
-	private static final List<String> MODELS = List.of("Alien", "Robot", "Frog", "Burger");
+	private static final List<String> MODELS = List.of("Alien", "Robot", "Frog", "Burger", "Penguin", "SpongeBob", "Skinny Alien", "Blue");
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -68,6 +70,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			CharacterSettings settings = CharacterSettings.get();
 			settings.setTalkingMouths(true);
 			settings.setFartDetection(true);
+			settings.setMiddleFinger(true);
 			settings.setDefaultChoice(Choice.OWN_SKIN);
 			settings.setChoice(FRIEND, "Friend", Choice.DEFAULT);
 			settings.setChoice(client.getUser().getProfileId(), client.getUser().getName(), Choice.DEFAULT);
@@ -80,6 +83,10 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		String v2jar = System.getProperty("playercharacters.test.v2jar");
 		if (v2jar != null) {
 			checkUpgradeFromVersion2(context, Path.of(v2jar));
+		}
+		String v3jar = System.getProperty("playercharacters.test.v3jar");
+		if (v3jar != null) {
+			checkUpgradeFromVersion3(context, Path.of(v3jar));
 		}
 		addSkinCharacter(context);
 
@@ -114,6 +121,20 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				context.waitTicks(10);
 			}
 
+			// Penguins waddle: the whole penguin rocks from side to side while it walks.
+			setChoice(context, Choice.character("Penguin"));
+			float[] rock = context.computeOnClient(client -> {
+				CharacterRenderState state = friendRenderState(client);
+				net.minecraft.client.renderer.entity.state.AvatarRenderState avatar = (net.minecraft.client.renderer.entity.state.AvatarRenderState) state;
+				avatar.walkAnimationSpeed = 1.0F;
+				avatar.walkAnimationPos = (float) (Math.PI / 2 / 0.6662);
+				net.minecraft.client.model.player.PlayerModel model = ((net.minecraft.client.renderer.entity.player.AvatarRenderer<?>) client.getEntityRenderDispatcher()
+					.getRenderer(client.level.getPlayerByUUID(FRIEND))).getModel();
+				model.setupAnim(avatar);
+				return new float[] {model.body.zRot, model.leftLeg.zRot};
+			});
+			check(Math.abs(rock[0] - Math.toRadians(9)) < 0.01 && Math.abs(rock[1] - rock[0]) < 0.2, "the penguin waddles (body tilted " + Math.toDegrees(rock[0]) + " degrees)");
+
 			// Closer, from the side, looking a little down: shows the held sword and the open jaw.
 			setChoice(context, Choice.character("Alien"));
 			try (Talking ignored = Talking.start(FRIEND)) {
@@ -124,7 +145,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 					turnFriend(client, 50.0F);
 				});
 				context.waitTicks(2);
-				context.takeScreenshot("11-friend-alien-talking-side");
+				context.takeScreenshot("19-friend-alien-talking-side");
 				context.runOnClient(client -> {
 					client.options.fov().set(40);
 					client.player.setXRot(0.0F);
@@ -136,7 +157,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				context.waitTicks(10);
 				check(!CharacterSettings.get().talkingMouths(), "U turned talking mouths off");
 				checkRenderState(context, "Alien", false);
-				context.takeScreenshot("12-mouths-off-while-talking");
+				context.takeScreenshot("20-mouths-off-while-talking");
 				context.getInput().pressKey(InputConstants.KEY_U);
 				context.waitTicks(3);
 				check(CharacterSettings.get().talkingMouths(), "U turned talking mouths back on");
@@ -144,7 +165,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				// Skin characters still open their mouth too.
 				setChoice(context, Choice.character("Tester"));
 				checkSkin(context, FRIEND, "/talking");
-				context.takeScreenshot("13-friend-skin-character-talking");
+				context.takeScreenshot("21-friend-skin-character-talking");
 			}
 			context.waitTicks(10);
 			checkSkin(context, FRIEND, "/idle");
@@ -155,8 +176,8 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				client.options.hideGui = true;
 				client.player.setXRot(12.0F);
 			});
-			shot = 14;
-			for (String id : List.of("Burger", "Robot", "Frog", "Alien", "Tester")) {
+			shot = 30;
+			for (String id : List.of("Burger", "Robot", "Frog", "Alien", "Penguin", "SpongeBob", "Skinny Alien", "Blue", "Tester")) {
 				setChoice(context, Choice.character(id));
 				context.runOnClient(client -> FartEffects.start(FRIEND));
 				context.waitTicks(7);
@@ -166,8 +187,24 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				context.waitTicks(25);
 				check(fartBend(context) == 0.0F && !context.computeOnClient(client -> FartEffects.isFarting(FRIEND)), id + " stands up straight again");
 			}
+			// The middle finger, at us: the arm goes up, the held sword goes away, and the face gets angry.
+			context.runOnClient(client -> turnFriend(client, 0.0F));
+			shot = 40;
+			for (String id : List.of("Burger", "Robot", "Frog", "Alien", "Penguin", "SpongeBob", "Skinny Alien", "Blue", "Tester")) {
+				setChoice(context, Choice.character(id));
+				context.runOnClient(client -> MiddleFingerEmote.start(FRIEND));
+				context.waitTicks(8);
+				boolean[] seen = context.computeOnClient(client -> {
+					CharacterRenderState state = friendRenderState(client);
+					net.minecraft.client.renderer.entity.state.AvatarRenderState avatar = (net.minecraft.client.renderer.entity.state.AvatarRenderState) state;
+					return new boolean[] {state.playercharacters$middleFinger() > 0.95F, state.playercharacters$mad(), avatar.rightHandItemState.isEmpty()};
+				});
+				check(seen[0] && seen[1] && seen[2], id + " shows the middle finger, looks mad and puts the sword away");
+				context.takeScreenshot(String.format("%02d-friend-%s-middle-finger", shot++, id.toLowerCase().replace(' ', '-')));
+				context.waitTicks(56);
+				check(!context.computeOnClient(client -> MiddleFingerEmote.isActive(FRIEND)), id + " calms down again");
+			}
 			context.runOnClient(client -> {
-				turnFriend(client, 0.0F);
 				client.options.hideGui = false;
 				client.player.setXRot(0.0F);
 			});
@@ -185,7 +222,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			check(context.computeOnClient(client -> client.screen.children().stream()
 				.anyMatch(child -> child instanceof CycleButton<?> button && button.getMessage().getString().startsWith("Farts: ON"))),
 				"the menu has the Farts button");
-			context.takeScreenshot("19-menu");
+			context.takeScreenshot("50-menu");
 
 			// Click our own row's button, pick the Burger in the picker, press Choose.
 			clickWidget(context, client -> {
@@ -203,15 +240,15 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				throw new AssertionError("Burger is not in the picker");
 			});
 			context.waitTicks(3);
-			context.takeScreenshot("20-picker-burger-preview");
+			context.takeScreenshot("51-picker-burger-preview");
 			context.clickScreenButton("playercharacters.picker.choose");
 			context.waitForScreen(CharacterMenuScreen.class);
 			UUID self = context.computeOnClient(client -> client.player.getUUID());
 			check(context.computeOnClient(client -> CharacterSettings.get().choiceFor(self)).equals(Choice.character("Burger")), "picker saved Burger for us");
 			context.clickScreenButton("playercharacters.menu.reload");
 			context.waitTicks(2);
-			check(context.computeOnClient(client -> CharacterLibrary.all().size()) == 5, "reload keeps all five characters");
-			context.takeScreenshot("21-menu-after-choosing");
+			check(context.computeOnClient(client -> CharacterLibrary.all().size()) == 9, "reload keeps all nine characters");
+			context.takeScreenshot("52-menu-after-choosing");
 			context.setScreen(() -> null);
 
 			// Ourselves in third person. The friend would block the camera, so remove them first.
@@ -222,7 +259,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			});
 			try (Talking ignored = Talking.start(self)) {
 				context.waitTicks(4);
-				context.takeScreenshot("22-self-burger-talking");
+				context.takeScreenshot("53-self-burger-talking");
 			}
 
 			// Typing "fart" in chat makes you fart. From behind, you see it come out.
@@ -233,27 +270,47 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			context.waitFor(client -> FartEffects.startedCount() > before, 100);
 			check(context.computeOnClient(client -> FartEffects.isFarting(self)), "typing \"fart\" in chat made our character fart");
 			context.waitTicks(7);
-			context.takeScreenshot("23-self-fart-from-chat");
+			context.takeScreenshot("54-self-fart-from-chat");
 			context.waitTicks(30);
 
+			// Typing "fuck you" does the middle finger. From the front, you see it.
+			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_FRONT));
+			int fingersBefore = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
+			context.runOnClient(client -> client.player.connection.sendChat("well fuck you then"));
+			context.waitFor(client -> MiddleFingerEmote.startedCount() > fingersBefore, 100);
+			check(context.computeOnClient(client -> MiddleFingerEmote.isActive(self)), "typing \"fuck you\" in chat made our character show the middle finger");
+			context.waitTicks(8);
+			context.takeScreenshot("55-self-middle-finger-from-chat");
+			context.waitTicks(60);
+			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
+
 			// With farts turned off in the menu, nothing happens.
-			context.runOnClient(client -> CharacterSettings.get().setFartDetection(false));
+			context.runOnClient(client -> {
+				CharacterSettings.get().setFartDetection(false);
+				CharacterSettings.get().setMiddleFinger(false);
+			});
 			int whileOff = context.computeOnClient(client -> FartEffects.startedCount());
 			context.runOnClient(client -> client.player.connection.sendChat("fart"));
+			context.runOnClient(client -> client.player.connection.sendChat("fuck you"));
 			context.waitTicks(40);
 			check(context.computeOnClient(client -> FartEffects.startedCount()) == whileOff, "no fart while farts are turned off");
-			context.runOnClient(client -> CharacterSettings.get().setFartDetection(true));
+			check(!context.computeOnClient(client -> MiddleFingerEmote.isActive(self)), "no middle finger while it is turned off");
+			context.runOnClient(client -> {
+				CharacterSettings.get().setFartDetection(true);
+				CharacterSettings.get().setMiddleFinger(true);
+			});
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_FRONT));
 
 			// Real audio through Simple Voice Chat, when it is installed in the test game.
 			if (FabricLoader.getInstance().isModLoaded("voicechat")) {
 				context.waitTicks(10);
 				int fartsBeforeVoice = context.computeOnClient(client -> FartEffects.startedCount());
-				VoiceChatCheck.run(context, world, self, () -> context.takeScreenshot("24-voice-chat-self-talking"));
+				VoiceChatCheck.run(context, world, self, () -> context.takeScreenshot("56-voice-chat-self-talking"));
 				String clips = System.getProperty("playercharacters.test.speechClips");
 				if (clips != null) {
 					context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
-					VoiceChatCheck.speech(context, world, Path.of(clips), fartsBeforeVoice, () -> context.takeScreenshot("25-self-fart-from-voice-chat"));
+					VoiceChatCheck.speech(context, world, Path.of(clips), fartsBeforeVoice, () -> context.takeScreenshot("57-self-fart-from-voice-chat"),
+						() -> context.takeScreenshot("58-self-middle-finger-from-voice-chat"));
 				} else {
 					System.out.println("[playercharacters-test] No speech clips given, skipping the spoken \"fart\" check");
 				}
@@ -264,22 +321,30 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 
 			Path config = FabricLoader.getInstance().getConfigDir().resolve("playercharacters.json");
 			String saved = readString(config);
-			check(saved.contains("\"character:Burger\"") && saved.contains(FRIEND.toString()) && saved.contains("\"fartDetection\": true"),
+			check(saved.contains("\"character:Burger\"") && saved.contains(FRIEND.toString()) && saved.contains("\"fartDetection\": true")
+				&& saved.contains("\"middleFinger\": true"),
 				"choices saved to playercharacters.json:\n" + saved);
 		}
 	}
 
-	/** The examples: four 3D characters, put in the characters folder by the mod. */
+	/** The examples: eight 3D characters, put in the characters folder by the mod. */
 	private static void checkExamples(ClientGameTestContext context) {
 		List<String> ids = context.computeOnClient(client -> CharacterLibrary.all().stream().map(PlayerCharacter::id).toList());
-		check(ids.equals(List.of("Alien", "Burger", "Frog", "Robot")), "example characters loaded, got " + ids);
+		check(ids.equals(List.of("Alien", "Blue", "Burger", "Frog", "Penguin", "Robot", "Skinny Alien", "SpongeBob")), "example characters loaded, got " + ids);
 		for (String id : MODELS) {
 			PlayerCharacter character = CharacterLibrary.get(id);
 			check(character.isModel() && character.model().quadCount() > 5000 && character.icon() != null,
 				id + " is a 3D model with an icon (" + character.model().quadCount() + " polygons)");
-			check(character.model().butt().y() > 0.3F && character.model().butt().z() < 0.0F,
+			check(character.model().butt().y() > 0.2F && character.model().butt().z() < 0.0F,
 				id + "'s butt is behind it, above the ground: " + character.model().butt());
+			CharacterModel.Extras extras = character.model().extras();
+			check(!extras.madParts().isEmpty() && extras.middleFinger() != null && extras.middleFinger().vertexCount() > 0,
+				id + " has an angry face " + extras.madParts().keySet() + " and a middle finger");
 		}
+		check(CharacterLibrary.get("Penguin").model().extras().waddleRadians() > 0.1F, "the penguin waddles");
+		check(CharacterLibrary.get("SpongeBob").model().extras().headTurn() == 0.3F && CharacterLibrary.get("Blue").model().extras().headTurn() == 0.0F,
+			"SpongeBob's sponge turns a little, Blue's block not at all");
+		check(CharacterLibrary.get("Skinny Alien").model().height() > 2.1F, "the skinny alien is tall: " + CharacterLibrary.get("Skinny Alien").model().height());
 		CharacterModel burger = CharacterLibrary.get("Burger").model();
 		check(burger.jawOpenRadians() < 0.0F, "the burger's bun opens upward");
 		CharacterModel.Part head = burger.part(CharacterModel.Bone.HEAD);
@@ -325,9 +390,9 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		check(Files.exists(folder.resolve("Frog.png")) && readString(folder.resolve("Frog.json")).contains("My Frog"), "upgrade: the changed old frog was kept");
 		check(CharacterLibrary.get("Frog").isModel() && CharacterLibrary.problems().stream().anyMatch(problem -> problem.startsWith("Frog.png: skipped")),
 			"upgrade: the 3D frog is used and Frog.png is reported: " + CharacterLibrary.problems());
-		check(readString(folder.resolve(".examples")).equals("Robot\nFrog\nAlien\nRobot 3D\nFrog 3D\nBurger\n"),
+		check(readString(folder.resolve(".examples")).equals("Robot\nFrog\nAlien\nRobot 3D\nFrog 3D\nBurger\nPenguin\nSpongeBob\nSkinny Alien\nBlue\n"),
 			"upgrade: the examples list was updated");
-		check(readString(folder.resolve("README.txt")).contains("FARTS"), "upgrade: README.txt was updated");
+		check(readString(folder.resolve("README.txt")).contains("middle finger"), "upgrade: README.txt was updated");
 		context.runOnClient(client -> {
 			try {
 				Files.delete(folder.resolve("Frog.png"));
@@ -337,7 +402,34 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			}
 			CharacterLibrary.reload();
 		});
-		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 4, "upgrade: four 3D characters and no problems");
+		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8, "upgrade: eight 3D characters and no problems");
+	}
+
+	/** Puts the robot back the way version 3 left it, with an old examples list: it gets updated, and the new characters arrive. */
+	private static void checkUpgradeFromVersion3(ClientGameTestContext context, Path v3jar) {
+		Path folder = CharacterLibrary.folder();
+		context.runOnClient(client -> {
+			try (java.nio.file.FileSystem jar = java.nio.file.FileSystems.newFileSystem(v3jar)) {
+				for (String file : List.of("Robot/model.obj", "Robot/character.json", "Robot/icon.png")) {
+					Files.copy(jar.getPath("assets/playercharacters/examples/" + file), folder.resolve(file), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+				}
+				for (String example : List.of("Penguin", "Blue")) {
+					try (var files = Files.list(folder.resolve(example))) {
+						for (Path file : files.toList()) {
+							Files.delete(file);
+						}
+					}
+					Files.delete(folder.resolve(example));
+				}
+				Files.writeString(folder.resolve(".examples"), "Robot\nFrog\nAlien\nRobot 3D\nFrog 3D\nBurger\nSpongeBob\nSkinny Alien\n");
+			} catch (IOException e) {
+				throw new AssertionError("Couldn't set up the version 3 folder", e);
+			}
+			CharacterLibrary.reload();
+		});
+		check(readString(folder.resolve("Robot").resolve("model.obj")).contains("o middle_finger"), "upgrade: the robot of version 3 got its middle finger");
+		check(Files.isDirectory(folder.resolve("Penguin")) && Files.isDirectory(folder.resolve("Blue")), "upgrade: the new characters were added");
+		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8, "upgrade from 3: eight characters and no problems");
 	}
 
 	/** A skin character made from Minecraft's own Steve skin, and what happens when a skin has a 3D character's name. */
@@ -366,7 +458,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			}
 			CharacterLibrary.reload();
 		});
-		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 5, "five characters and no problems");
+		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 9, "nine characters and no problems");
 	}
 
 	private static void setChoice(ClientGameTestContext context, Choice choice) {

@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.loader.api.FabricLoader;
 
 /**
- * Who is which character, the default for everyone else, and whether talking mouths and farts are on.
+ * Who is which character, the default for everyone else, and whether talking mouths and the emotes are on.
  * Saved to {@code config/playercharacters.json} after every change.
  */
 public final class CharacterSettings {
@@ -30,6 +30,7 @@ public final class CharacterSettings {
 	private final Map<UUID, String> playerNames = new ConcurrentHashMap<>();
 	private volatile boolean talkingMouths = true;
 	private volatile boolean fartDetection = true;
+	private volatile boolean middleFinger = true;
 	private volatile Choice defaultChoice = Choice.OWN_SKIN;
 
 	private CharacterSettings() {
@@ -55,6 +56,16 @@ public final class CharacterSettings {
 
 	public void setFartDetection(boolean enabled) {
 		this.fartDetection = enabled;
+		this.save();
+	}
+
+	/** Whether saying (or typing) "fuck you" makes that player's character show the middle finger. */
+	public boolean middleFinger() {
+		return this.middleFinger;
+	}
+
+	public void setMiddleFinger(boolean enabled) {
+		this.middleFinger = enabled;
 		this.save();
 	}
 
@@ -96,6 +107,7 @@ public final class CharacterSettings {
 			}
 			this.talkingMouths = data.talkingMouths;
 			this.fartDetection = data.fartDetection;
+			this.middleFinger = data.middleFinger;
 			this.defaultChoice = Choice.decode(data.defaultCharacter, Choice.OWN_SKIN);
 			if (this.defaultChoice.kind() == Choice.Kind.DEFAULT) {
 				this.defaultChoice = Choice.OWN_SKIN;
@@ -123,6 +135,7 @@ public final class CharacterSettings {
 		Data data = new Data();
 		data.talkingMouths = this.talkingMouths;
 		data.fartDetection = this.fartDetection;
+		data.middleFinger = this.middleFinger;
 		data.defaultCharacter = this.defaultChoice.encode();
 		this.choices.entrySet().stream()
 			.sorted(Comparator.comparing(entry -> this.playerNames.getOrDefault(entry.getKey(), ""), String.CASE_INSENSITIVE_ORDER))
@@ -161,6 +174,7 @@ public final class CharacterSettings {
 	private static final class Data {
 		boolean talkingMouths = true;
 		boolean fartDetection = true;
+		boolean middleFinger = true;
 		String defaultCharacter = "own";
 		Map<String, PlayerData> players = new LinkedHashMap<>();
 	}

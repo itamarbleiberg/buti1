@@ -27,7 +27,7 @@ public final class SpeechModel {
 	private static final String DONE_FILE = ".unpacked";
 
 	public enum Status {
-		/** Not loaded (yet): nobody talked since the game started, or fart detection is off. */
+		/** Not loaded (yet): nobody talked since the game started, or voice emotes are off. */
 		OFF,
 		LOADING,
 		READY,
@@ -65,16 +65,16 @@ public final class SpeechModel {
 		try {
 			Path folder = unpack();
 			LibVosk.setLogLevel(LogLevel.WARNINGS);
-			PlayerCharactersClient.LOGGER.info("Loading the speech model for fart detection. A \"Can't open file\" message about Gr.fst may follow: "
+			PlayerCharactersClient.LOGGER.info("Loading the speech model for voice emotes. A \"Can't open file\" message about Gr.fst may follow: "
 				+ "that file was left out on purpose, it is only needed to recognize every English word.");
 			model = new Model(pathForNativeCode(folder));
 			status = Status.READY;
-			PlayerCharactersClient.LOGGER.info("Fart detection is ready ({} ms)", (System.nanoTime() - start) / 1_000_000);
+			PlayerCharactersClient.LOGGER.info("Voice emotes are ready ({} ms)", (System.nanoTime() - start) / 1_000_000);
 			return model;
 		} catch (Throwable e) { // also UnsatisfiedLinkError and friends when Vosk has no library for this computer
 			status = Status.UNAVAILABLE;
 			problem = e.getClass().getSimpleName() + ": " + e.getMessage();
-			PlayerCharactersClient.LOGGER.warn("Fart detection is unavailable: speech recognition couldn't start", e);
+			PlayerCharactersClient.LOGGER.warn("Voice emotes are unavailable: speech recognition couldn't start", e);
 			return null;
 		}
 	}

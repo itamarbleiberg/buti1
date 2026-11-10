@@ -1,0 +1,16 @@
+{
+  "name": "Skinny Alien",
+  "size": 1.0,
+  "jaw_angle": 22,
+  "butt": [0, 1.02, -0.105],
+  "head_turn": 0.75,
+  "parts": {
+    "head": { "pivot": [0, 1.6, 0] },
+    "jaw": { "pivot": [0, 2, -0.025] },
+    "body": { "pivot": [0, 1.58, 0] },
+    "right_arm": { "pivot": [-0.19, 1.555, -0.015], "hand": [-0.236, 0.64, 0.06] },
+    "left_arm": { "pivot": [0.19, 1.555, -0.015], "hand": [0.236, 0.64, 0.06] },
+    "right_leg": { "pivot": [-0.085, 1.04, 0] },
+    "left_leg": { "pivot": [0.085, 1.04, 0] }
+  }
+}

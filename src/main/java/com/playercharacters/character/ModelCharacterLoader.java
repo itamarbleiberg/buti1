@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -25,9 +26,12 @@ import org.jspecify.annotations.Nullable;
  * Loads a 3D character from a folder:
  * <ul>
  *   <li>{@code model.obj} - the model (required). Objects/groups are matched to body parts by name:
- *       head, jaw, body, right_arm, left_arm, right_leg, left_leg. Anything else moves with the body.</li>
+ *       head, jaw, body, right_arm, left_arm, right_leg, left_leg. Anything else moves with the body.
+ *       For the middle finger emote: objects named "mad_&lt;part&gt;" are only drawn while the character is mad,
+ *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
- *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt and pivots.</li>
+ *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn
+ *       and pivots.</li>
  *   <li>{@code icon.png} - optional picture for the menus.</li>
  * </ul>
  * Models are expected in Blender's usual export orientation: Y up, facing +Z, 1 unit = 1 block.
@@ -54,7 +58,20 @@ final class ModelCharacterLoader {
 		@Nullable Float turn;
 		@Nullable Float jaw_angle;
 		float @Nullable [] butt;
+		@Nullable Float waddle;
+		@Nullable Float head_turn;
 		@Nullable Map<String, PartOptions> parts;
+	}
+
+	/** What an object in model.obj is used for. */
+	private enum Kind {
+		NORMAL,
+		MAD,
+		CALM,
+		MIDDLE_FINGER
+	}
+
+	private record Slot(Kind kind, CharacterModel.Bone bone) {
 	}
 
 	@SuppressWarnings("unused")
@@ -154,10 +171,10 @@ final class ModelCharacterLoader {
 		}
 		Transform t = new Transform(cos, sin, minY, scale / PLAYER_SCALE);
 
-		Map<CharacterModel.Bone, List<Obj.Face>> facesByBone = new EnumMap<>(CharacterModel.Bone.class);
+		Map<Slot, List<Obj.Face>> facesBySlot = new LinkedHashMap<>();
 		int quads = 0;
 		for (Obj.Face face : obj.faces) {
-			facesByBone.computeIfAbsent(boneFor(face.group), b -> new ArrayList<>()).add(face);
+			facesBySlot.computeIfAbsent(slotFor(face.group), b -> new ArrayList<>()).add(face);
 			quads += face.corners.length <= 4 ? 1 : face.corners.length - 2;
 		}
 		if (quads > MAX_QUADS) {
@@ -165,9 +182,11 @@ final class ModelCharacterLoader {
 		}
 
 		Map<CharacterModel.Bone, CharacterModel.Part> parts = new EnumMap<>(CharacterModel.Bone.class);
-		for (Map.Entry<CharacterModel.Bone, List<Obj.Face>> entry : facesByBone.entrySet()) {
-			CharacterModel.Bone bone = entry.getKey();
-			parts.put(bone, buildPart(obj, entry.getValue(), bone, partOptions(options, bone), t));
+		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
+			CharacterModel.Bone bone = entry.getKey().bone();
+			if (entry.getKey().kind() == Kind.NORMAL) {
+				parts.put(bone, buildPart(obj, entry.getValue(), bone, partOptions(options, bone), t));
+			}
 		}
 		// A joint without polygons, for example a head joint for a jaw that is the whole head (like the burger's bun).
 		for (CharacterModel.Bone bone : CharacterModel.Bone.values()) {
@@ -187,7 +206,48 @@ final class ModelCharacterLoader {
 		} else {
 			butt = t.bodySpace(defaultButt(parts, hip));
 		}
-		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt);
+		// Emote parts move exactly like the part they belong to, so they use its joint.
+		Map<CharacterModel.Bone, CharacterModel.Part> mad = new EnumMap<>(CharacterModel.Bone.class);
+		Map<CharacterModel.Bone, CharacterModel.Part> calm = new EnumMap<>(CharacterModel.Bone.class);
+		CharacterModel.Part middleFinger = null;
+		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
+			Slot slot = entry.getKey();
+			if (slot.kind() == Kind.NORMAL) {
+				continue;
+			}
+			CharacterModel.Part part = buildPart(obj, entry.getValue(), slot.bone(), partOptions(options, slot.bone()), t);
+			CharacterModel.Part main = parts.get(slot.bone());
+			if (main != null) {
+				part = part.withPivot(main.pivot());
+			}
+			switch (slot.kind()) {
+				case MAD -> mad.put(slot.bone(), part);
+				case CALM -> calm.put(slot.bone(), part);
+				default -> middleFinger = part;
+			}
+		}
+		float waddle = options.waddle == null ? 0.0F : Math.max(0, Math.min(30, options.waddle));
+		float headTurn = options.head_turn == null ? 1.0F : Math.max(0, Math.min(1, options.head_turn));
+		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn);
+		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt, height * scale, extras);
+	}
+
+	static Slot slotFor(String group) {
+		String name = normalize(group);
+		if (name.startsWith("middle_finger")) {
+			return new Slot(Kind.MIDDLE_FINGER, CharacterModel.Bone.RIGHT_ARM);
+		}
+		if (name.startsWith("mad_")) {
+			return new Slot(Kind.MAD, boneFor(name.substring(4)));
+		}
+		if (name.startsWith("calm_")) {
+			return new Slot(Kind.CALM, boneFor(name.substring(5)));
+		}
+		return new Slot(Kind.NORMAL, boneFor(name));
+	}
+
+	private static String normalize(String group) {
+		return group.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_').replace('.', '_');
 	}
 
 	private static @Nullable PartOptions partOptions(Options options, CharacterModel.Bone bone) {
@@ -315,7 +375,7 @@ final class ModelCharacterLoader {
 	}
 
 	static CharacterModel.Bone boneFor(String group) {
-		String name = group.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_').replace('.', '_');
+		String name = normalize(group);
 		for (CharacterModel.Bone bone : CharacterModel.Bone.values()) {
 			for (String alias : aliases(bone)) {
 				if (name.equals(alias) || name.startsWith(alias + "_")) {

@@ -4,7 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.playercharacters.character.CharacterModel;
 import com.playercharacters.character.CharacterModel.Bone;
+import com.playercharacters.character.CharacterModel.Part;
 import com.playercharacters.character.PlayerCharacter;
+import java.util.Map;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.player.PlayerModel;
@@ -43,28 +45,45 @@ public final class CharacterModelRenderer {
 		// Drawing is deferred, so the player model hasn't been posed for this player yet; pose it now to read its angles.
 		playerModel.setupAnim(state);
 		RenderType type = ARGB.alpha(tint) < 255 ? RenderTypes.itemEntityTranslucentCull(model.texture()) : RenderTypes.entityCutout(model.texture());
-		float jawAngle = ((CharacterRenderState) state).playercharacters$jaw() * model.jawOpenRadians();
+		CharacterRenderState characterState = (CharacterRenderState) state;
+		float jawAngle = characterState.playercharacters$jaw() * model.jawOpenRadians();
+		CharacterModel.Extras extras = model.extras();
+		boolean fingerUp = characterState.playercharacters$middleFinger() > 0.0F && extras.middleFinger() != null;
+		Part rightArm = fingerUp ? extras.middleFinger() : model.part(Bone.RIGHT_ARM);
 
-		submitPart(model, Bone.BODY, playerModel.body, null, 0, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.HEAD, playerModel.head, null, 0, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.JAW, playerModel.head, model.part(Bone.HEAD), jawAngle, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.RIGHT_ARM, playerModel.rightArm, null, 0, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.LEFT_ARM, playerModel.leftArm, null, 0, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.RIGHT_LEG, playerModel.rightLeg, null, 0, poseStack, collector, type, light, overlay, tint);
-		submitPart(model, Bone.LEFT_LEG, playerModel.leftLeg, null, 0, poseStack, collector, type, light, overlay, tint);
+		for (Bone bone : Bone.values()) {
+			submitPart(model, bone, bone == Bone.RIGHT_ARM ? rightArm : model.part(bone), playerModel, jawAngle, poseStack, collector, type, light, overlay, tint);
+		}
+		// The angry face goes on while mad, and what it replaces comes off.
+		Map<Bone, Part> faceParts = characterState.playercharacters$mad() ? extras.madParts() : extras.calmParts();
+		for (Map.Entry<Bone, Part> entry : faceParts.entrySet()) {
+			submitPart(model, entry.getKey(), entry.getValue(), playerModel, jawAngle, poseStack, collector, type, light, overlay, tint);
+		}
+	}
+
+	private static ModelPart follows(PlayerModel playerModel, Bone bone) {
+		return switch (bone) {
+			case HEAD, JAW -> playerModel.head;
+			case BODY -> playerModel.body;
+			case RIGHT_ARM -> playerModel.rightArm;
+			case LEFT_ARM -> playerModel.leftArm;
+			case RIGHT_LEG -> playerModel.rightLeg;
+			case LEFT_LEG -> playerModel.leftLeg;
+		};
 	}
 
 	/**
-	 * @param follows   the player model part whose pose this part copies
-	 * @param jawParent for the jaw: the head part (the jaw turns with the head first, then opens around its own hinge)
+	 * Draws one part where the player model's matching part is. The jaw turns with the head first (around the head's
+	 * joint), then opens around its own hinge.
 	 */
-	private static void submitPart(CharacterModel model, Bone bone, ModelPart follows, CharacterModel.@Nullable Part jawParent, float jawAngle,
+	private static void submitPart(CharacterModel model, Bone bone, @Nullable Part part, PlayerModel playerModel, float jawAngle,
 		PoseStack poseStack, SubmitNodeCollector collector, RenderType type, int light, int overlay, int tint) {
-		CharacterModel.Part part = model.part(bone);
+		ModelPart follows = follows(playerModel, bone);
 		// Parts without polygons only provide a joint (like the burger's head joint, which its bun turns with).
 		if (part == null || part.vertexCount() == 0 || !follows.visible) {
 			return;
 		}
+		Part jawParent = bone == Bone.JAW ? model.part(Bone.HEAD) : null;
 		poseStack.pushPose();
 		if (bone == Bone.JAW) {
 			applyPose(poseStack, jawParent != null ? jawParent.pivot() : part.pivot(), follows);

@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import com.playercharacters.PlayerCharactersClient;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.MiddleFingerEmote;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -20,17 +21,20 @@ import org.vosk.Model;
 import org.vosk.Recognizer;
 
 /**
- * Listens for the word "fart" in voice chat: in the voices of everyone you can hear, and in your own microphone.
+ * Listens for "fart" and "fuck you" in voice chat: in the voices of everyone you can hear, and in your own microphone.
  * <p>
  * Uses Vosk offline speech recognition on its own thread, so voice chat is never slowed down. The recognizer only
- * knows a handful of words: "fart", and words that sound like it ("far", "part", "heart"...), so that near misses
- * are heard as those words instead of as "fart". Nothing is sent anywhere; it all happens on this computer.
+ * knows a handful of words: the two phrases, and words that sound like them ("far", "part", "thank you", "luck"...),
+ * so that near misses are heard as those words instead. Nothing is sent anywhere; it all happens on this computer.
+ * <p>
+ * Tested with 168 computer-voiced sentences in six accents: "fart" in 32 of 36, "fuck you" in 36 of 36, and one false
+ * "fart" in the 168 sentences, which include lookalikes such as "farm", "heart", "thank you" and "what the fuck".
  */
-public final class FartDetector {
-	/** The word, and similar-sounding words that catch near misses. "[unk]" stands for any other word. */
-	private static final String GRAMMAR =
-		"[\"fart\", \"far\", \"part\", \"start\", \"heart\", \"art\", \"farm\", \"fast\", \"car\", \"dart\", \"[unk]\"]";
-	private static final String WORD = "fart";
+public final class VoiceEmoteDetector {
+	/** The phrases, and similar-sounding words that catch near misses. "[unk]" stands for any other word. */
+	private static final String GRAMMAR = "[\"fart\", \"far\", \"part\", \"start\", \"heart\", \"art\", \"farm\", \"fast\", \"car\", \"dart\", "
+		+ "\"fuck you\", \"fuck\", \"you\", \"thank you\", \"for you\", \"to you\", \"luck\", \"duck\", \"stuck\", \"truck\", \"back\", "
+		+ "\"look\", \"book\", \"hook\", \"fun\", \"fork\", \"folk\", \"[unk]\"]";
 	private static final int SAMPLE_RATE = 16_000;
 	/** Audio goes to the recognizer in 100 ms pieces. */
 	private static final int CHUNK = SAMPLE_RATE / 10;
@@ -56,7 +60,7 @@ public final class FartDetector {
 	private static volatile @Nullable Thread worker;
 	private static volatile boolean warnedFull;
 
-	private FartDetector() {
+	private VoiceEmoteDetector() {
 	}
 
 	/**
@@ -66,14 +70,14 @@ public final class FartDetector {
 	 * @param pcm     20 ms of 48 kHz 16 bit mono audio; empty means they stopped talking
 	 */
 	public static void onAudio(@Nullable UUID speaker, short @Nullable [] pcm) {
-		if (speaker == null || !CharacterSettings.get().fartDetection() || SpeechModel.status() == SpeechModel.Status.UNAVAILABLE) {
+		if (speaker == null || !anyEmoteOn() || SpeechModel.status() == SpeechModel.Status.UNAVAILABLE) {
 			return;
 		}
 		startWorker();
 		Job job = pcm == null || pcm.length == 0 ? new Stopped(speaker) : new Audio(speaker, pcm.clone());
 		if (!QUEUE.offer(job) && !warnedFull) {
 			warnedFull = true;
-			PlayerCharactersClient.LOGGER.warn("Fart detection can't keep up with voice chat, skipping some audio");
+			PlayerCharactersClient.LOGGER.warn("Voice emotes can't keep up with voice chat, skipping some audio");
 		}
 	}
 
@@ -88,9 +92,9 @@ public final class FartDetector {
 		if (worker != null) {
 			return;
 		}
-		synchronized (FartDetector.class) {
+		synchronized (VoiceEmoteDetector.class) {
 			if (worker == null) {
-				Thread thread = new Thread(FartDetector::run, "Player Characters fart detection");
+				Thread thread = new Thread(VoiceEmoteDetector::run, "Player Characters voice emotes");
 				thread.setDaemon(true);
 				thread.setPriority(Thread.NORM_PRIORITY - 1);
 				thread.start();
@@ -114,7 +118,7 @@ public final class FartDetector {
 				}
 				sweep(listeners, System.nanoTime());
 			} catch (RuntimeException e) {
-				PlayerCharactersClient.LOGGER.warn("Fart detection failed, starting over", e);
+				PlayerCharactersClient.LOGGER.warn("Voice emote detection failed, starting over", e);
 				listeners.values().forEach(Listener::close);
 				listeners.clear();
 			}
@@ -163,25 +167,33 @@ public final class FartDetector {
 			if (quiet > DONE_AFTER_NANOS) {
 				listener.finish();
 			}
-			if (quiet > FORGET_AFTER_NANOS || !CharacterSettings.get().fartDetection()) {
+			if (quiet > FORGET_AFTER_NANOS || !anyEmoteOn()) {
 				listener.close();
 				iterator.remove();
 			}
 		}
-		if (listeners.isEmpty() && !CharacterSettings.get().fartDetection()) {
+		if (listeners.isEmpty() && !anyEmoteOn()) {
 			SpeechModel.close(); // turned off in the menu: give the memory back
 		}
 	}
 
-	/** How many times the word is in a recognized text. */
-	static int count(String text) {
-		int count = 0;
-		for (String word : text.split("\\s+")) {
-			if (word.equals(WORD)) {
-				count++;
+	private static boolean anyEmoteOn() {
+		CharacterSettings settings = CharacterSettings.get();
+		return settings.fartDetection() || settings.middleFinger();
+	}
+
+	/** How often each emote's phrase is in a recognized text: {farts, middle fingers}. */
+	static int[] count(String text) {
+		String[] words = text.strip().split("\\s+");
+		int[] counts = new int[2];
+		for (int i = 0; i < words.length; i++) {
+			if (words[i].equals("fart")) {
+				counts[0]++;
+			} else if (words[i].equals("fuck") && i + 1 < words.length && words[i + 1].equals("you")) {
+				counts[1]++;
 			}
 		}
-		return count;
+		return counts;
 	}
 
 	/** The value of {@code key} in one of Vosk's JSON results. */
@@ -195,9 +207,15 @@ public final class FartDetector {
 		}
 	}
 
-	private static void heard(UUID speaker) {
-		PlayerCharactersClient.LOGGER.debug("Heard \"{}\" from {}", WORD, speaker);
-		Minecraft.getInstance().execute(() -> FartEffects.start(speaker));
+	private static void heard(UUID speaker, int emote) {
+		PlayerCharactersClient.LOGGER.debug("Heard {} from {}", emote == 0 ? "\"fart\"" : "\"fuck you\"", speaker);
+		Minecraft.getInstance().execute(() -> {
+			if (emote == 0) {
+				FartEffects.start(speaker);
+			} else {
+				MiddleFingerEmote.start(speaker);
+			}
+		});
 	}
 
 	/** Speech recognition for one person. */
@@ -208,8 +226,8 @@ public final class FartDetector {
 		private final short[] chunk = new short[CHUNK];
 		private final short[] frame = new short[1024];
 		private int chunkLength;
-		/** How many times the word was already acted on in the sentence being spoken. */
-		private int handled;
+		/** How many times each phrase was already acted on in the sentence being spoken. */
+		private final int[] handled = new int[2];
 		private boolean talking;
 		long lastAudioNanos;
 
@@ -257,13 +275,15 @@ public final class FartDetector {
 		}
 
 		private void check(String text, boolean sentenceEnded) {
-			int count = count(text);
-			if (count > this.handled) {
-				heard(this.speaker);
-				this.handled = count;
-			}
-			if (sentenceEnded) {
-				this.handled = 0;
+			int[] counts = count(text);
+			for (int emote = 0; emote < counts.length; emote++) {
+				if (counts[emote] > this.handled[emote]) {
+					heard(this.speaker, emote);
+					this.handled[emote] = counts[emote];
+				}
+				if (sentenceEnded) {
+					this.handled[emote] = 0;
+				}
 			}
 		}
 

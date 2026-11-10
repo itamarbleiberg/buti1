@@ -43,7 +43,7 @@ public final class CharacterMenuScreen extends Screen {
 	private static final Component YOU = Component.translatable("playercharacters.menu.you").withStyle(ChatFormatting.GRAY);
 	private static final boolean VOICE_CHAT_INSTALLED = FabricLoader.getInstance().isModLoaded("voicechat");
 	private static final int HEADER_HEIGHT = 44;
-	private static final int FOOTER_HEIGHT = 72;
+	private static final int FOOTER_HEIGHT = 96;
 	private static final int ROW_HEIGHT = 24;
 	private static final int FACE_SIZE = 16;
 	private static final int CHOICE_BUTTON_WIDTH = 130;
@@ -90,17 +90,23 @@ public final class CharacterMenuScreen extends Screen {
 
 		LinearLayout settingsRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		this.defaultButton = settingsRow.addChild(Button.builder(ChoiceText.forDefault(), button -> this.openDefaultPicker())
-			.width(150)
+			.width(170)
 			.tooltip(Tooltip.create(Component.translatable("playercharacters.menu.default.tooltip")))
 			.build());
 		settingsRow.addChild(CycleButton.onOffBuilder(this.settings.talkingMouths())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.talking_mouths.tooltip")))
-			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.talking_mouths"),
+			.create(0, 0, 140, 20, Component.translatable("playercharacters.menu.talking_mouths"),
 				(button, value) -> this.settings.setTalkingMouths(value)));
-		settingsRow.addChild(CycleButton.onOffBuilder(this.settings.fartDetection())
+
+		LinearLayout emoteRow = footer.addChild(LinearLayout.horizontal().spacing(8));
+		emoteRow.addChild(CycleButton.onOffBuilder(this.settings.fartDetection())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.farts.tooltip")))
 			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.farts"),
 				(button, value) -> this.settings.setFartDetection(value)));
+		emoteRow.addChild(CycleButton.onOffBuilder(this.settings.middleFinger())
+			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.middle_finger.tooltip")))
+			.create(0, 0, 180, 20, Component.translatable("playercharacters.menu.middle_finger"),
+				(button, value) -> this.settings.setMiddleFinger(value)));
 
 		LinearLayout buttonRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.open_folder"),
@@ -175,7 +181,7 @@ public final class CharacterMenuScreen extends Screen {
 		if (!VOICE_CHAT_INSTALLED) {
 			text.append(Component.literal("  "))
 				.append(Component.translatable("playercharacters.status.no_voice_chat").withStyle(ChatFormatting.RED));
-		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && this.settings.fartDetection()) {
+		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && (this.settings.fartDetection() || this.settings.middleFinger())) {
 			text.append(Component.literal("  "))
 				.append(Component.translatable("playercharacters.status.no_speech").withStyle(ChatFormatting.RED));
 		}
@@ -186,7 +192,7 @@ public final class CharacterMenuScreen extends Screen {
 		List<String> lines = new ArrayList<>(CharacterLibrary.problems());
 		if (!VOICE_CHAT_INSTALLED) {
 			lines.add(Component.translatable("playercharacters.status.no_voice_chat.tooltip").getString());
-		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && this.settings.fartDetection()) {
+		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && (this.settings.fartDetection() || this.settings.middleFinger())) {
 			lines.add(Component.translatable("playercharacters.status.no_speech.tooltip", String.valueOf(SpeechModel.problem())).getString());
 		}
 		return lines.isEmpty() ? null : Tooltip.create(Component.literal(String.join("\n", lines)));

@@ -5,6 +5,7 @@ import com.mojang.logging.LogUtils;
 import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.gui.CharacterMenuScreen;
 import java.util.regex.Pattern;
 import net.fabricmc.api.ClientModInitializer;
@@ -26,6 +27,9 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 	/** "fart" as a word of its own in a chat message (also "farts", "farted" and "farting"). */
 	private static final Pattern FART_IN_CHAT = Pattern.compile("(?<![\\p{L}\\p{N}_])fart(s|ed|ing)?(?![\\p{L}\\p{N}_])",
 		Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+	/** "fuck you", also written "fck you", "f*ck u", "f you" and similar. */
+	private static final Pattern FUCK_YOU_IN_CHAT = Pattern.compile("(?<![\\p{L}\\p{N}_])(fuck|fuk|fck|fk|f\\*+c?k?|f)\\s+(you|u|ya)(?![\\p{L}\\p{N}_])",
+		Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
 	private static KeyMapping openMenuKey;
 	private static KeyMapping toggleMouthsKey;
@@ -44,12 +48,15 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> CharacterLibrary.reload());
 		ClientTickEvents.END_CLIENT_TICK.register(PlayerCharactersClient::onEndTick);
 
-		// Saying "fart" in voice chat is handled by FartDetector. Typing it in chat works too.
+		// Saying the emote phrases in voice chat is handled by VoiceEmoteDetector. Typing them in chat works too.
 		ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
 			if (sender != null) {
 				String text = signedMessage != null ? signedMessage.signedContent() : message.getString();
 				if (FART_IN_CHAT.matcher(text).find()) {
 					FartEffects.start(sender.id());
+				}
+				if (FUCK_YOU_IN_CHAT.matcher(text).find()) {
+					MiddleFingerEmote.start(sender.id());
 				}
 			}
 		});
@@ -74,5 +81,6 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		}
 
 		FartEffects.tick(client);
+		MiddleFingerEmote.tick(client);
 	}
 }

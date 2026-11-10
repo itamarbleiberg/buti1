@@ -1,7 +1,7 @@
 package com.playercharacters.voice;
 
 import com.playercharacters.PlayerCharactersClient;
-import com.playercharacters.speech.FartDetector;
+import com.playercharacters.speech.VoiceEmoteDetector;
 import de.maxhenkel.voicechat.api.VoicechatPlugin;
 import de.maxhenkel.voicechat.api.events.ClientReceiveSoundEvent;
 import de.maxhenkel.voicechat.api.events.ClientSoundEvent;
@@ -28,7 +28,7 @@ public final class VoiceChatPlugin implements VoicechatPlugin {
 		registration.registerEvent(ClientReceiveSoundEvent.EntitySound.class, event -> heard(event.getEntityId(), event.getRawAudio()));
 		// Group chat: the channel id is the speaking player's UUID.
 		registration.registerEvent(ClientReceiveSoundEvent.StaticSound.class, event -> heard(event.getId(), event.getRawAudio()));
-		// Your own microphone, so your character talks (and farts) too: visible in third person and in the inventory.
+		// Your own microphone, so your character talks (and does emotes) too: visible in third person and in the inventory.
 		registration.registerEvent(ClientSoundEvent.class, event -> {
 			LocalPlayer player = Minecraft.getInstance().player;
 			if (player != null) {
@@ -38,14 +38,14 @@ public final class VoiceChatPlugin implements VoicechatPlugin {
 		registration.registerEvent(ClientVoicechatConnectionEvent.class, event -> {
 			if (!event.isConnected()) {
 				TalkTracker.clear();
-				FartDetector.clear();
+				VoiceEmoteDetector.clear();
 			}
 		});
 	}
 
-	/** One 20 ms frame of someone's voice: moves their mouth, and listens for "fart". */
+	/** One 20 ms frame of someone's voice: moves their mouth, and listens for the emote phrases. */
 	private static void heard(@Nullable UUID speaker, short @Nullable [] audio) {
 		TalkTracker.onAudioFrame(speaker, audio);
-		FartDetector.onAudio(speaker, audio);
+		VoiceEmoteDetector.onAudio(speaker, audio);
 	}
 }

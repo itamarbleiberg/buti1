@@ -1,0 +1,16 @@
+{
+  "name": "Penguin",
+  "size": 1.0,
+  "jaw_angle": 28,
+  "butt": [0, 0.29, -0.27],
+  "waddle": 9,
+  "parts": {
+    "head": { "pivot": [0, 1, 0] },
+    "jaw": { "pivot": [0, 1.072, 0.205] },
+    "body": { "pivot": [0, 1, 0] },
+    "right_arm": { "pivot": [-0.25, 0.95, 0], "hand": [-0.335, 0.56, 0.07] },
+    "left_arm": { "pivot": [0.25, 0.95, 0], "hand": [0.335, 0.56, 0.07] },
+    "right_leg": { "pivot": [-0.11, 0.22, 0] },
+    "left_leg": { "pivot": [0.11, 0.22, 0] }
+  }
+}

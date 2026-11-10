@@ -8,8 +8,9 @@ still see their name tag and what they hold.
 There are two kinds of characters.
 
 
-3D CHARACTERS (like the Alien, Robot, Frog and Burger)
--------------------------------------------------------
+3D CHARACTERS (like the Alien, Robot, Frog, Burger, Penguin, SpongeBob, Skinny Alien
+and Blue)
+-------------------------------------------------------------------------------------
 A folder with these files. The folder name is the character's name.
 
   Alien/model.obj        the 3D model (required)
@@ -24,6 +25,16 @@ Y up, facing forward (+Z), 1 unit = 1 block. Split it into separate objects name
 
 Each part moves like the same part of a normal player. The "jaw" opens while the player
 talks in Simple Voice Chat. Objects with other names move with the body.
+
+For the middle finger emote, a model can also have (all optional):
+
+  mad_head        shown only while the character is mad, for example angry eyebrows.
+                  Any part works: mad_jaw, mad_body...
+  calm_head       shown only while it is NOT mad (things the angry face replaces).
+  middle_finger   a right arm with the middle finger up, used instead of right_arm
+                  during the emote. Model it hanging down like right_arm, with the
+                  finger pointing forward: the arm is raised to point forward, which
+                  turns the finger up.
 
 character.json, for example:
 
@@ -48,6 +59,11 @@ character.json, for example:
              open it upward like a lid: the Burger's top bun uses -38.
   butt       where the fart cloud comes out (default: the middle of the body's back,
              just above the legs)
+  waddle     degrees the character rocks from side to side while walking (the
+             Penguin uses 9)
+  head_turn  how much of the player's looking around the head copies, from 0 (the
+             head stays still) to 1 (all of it, the default). SpongeBob uses 0.3,
+             because his whole sponge is his head.
   parts      "pivot" is the joint a part turns around, "hand" is where held items go.
              Both are in the model's own coordinates. Without them, they are guessed
              from the size of each part. A part can have a pivot without being in the
@@ -89,10 +105,12 @@ Every PNG file in this folder is one character.
 A skin and a 3D folder can't have the same name. If they do, the 3D one is used.
 
 
-FARTS
------
+EMOTES
+------
 When a player says "fart" in voice chat (or types it in chat), their character bends
-over and farts. This works for every character, and for players in their own skin.
-Turn it off with the "Farts" button in the character menu.
+over and farts. When they say "fuck you", their character shows the middle finger and
+looks mad for a few seconds. This works for every character, and for players in their
+own skin. Turn them off with the "Farts" and "Middle finger" buttons in the character
+menu.
 
 The example characters can be deleted. They won't come back.

@@ -1,6 +1,7 @@
 package com.playercharacters.test;
 
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.speech.SpeechModel;
 import com.playercharacters.voice.TalkTracker;
 import de.maxhenkel.voicechat.api.VoicechatServerApi;
@@ -10,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 import javax.sound.sampled.AudioInputStream;
@@ -23,7 +25,7 @@ import net.minecraft.world.entity.Entity;
 /**
  * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client,
  * for all three ways voice arrives: a nearby entity, a static (group-style) channel, and yourself. With recorded
- * sentences, also checks that saying "fart" is recognized. Only loaded when Simple Voice Chat is installed.
+ * sentences, also checks that saying "fart" and "fuck you" is recognized. Only loaded when Simple Voice Chat is installed.
  */
 @SuppressWarnings("UnstableApiUsage")
 final class VoiceChatCheck {
@@ -97,29 +99,46 @@ final class VoiceChatCheck {
 	 * Speaks recorded sentences as our own player through the real voice chat pipeline (encoded, sent, decoded),
 	 * and checks that the fart detection hears "fart" but not a similar word.
 	 */
-	static void speech(ClientGameTestContext context, TestSingleplayerContext world, Path clips, int fartsBeforeVoice, Runnable screenshot) {
+	static void speech(ClientGameTestContext context, TestSingleplayerContext world, Path clips, int fartsBeforeVoice, Runnable fartScreenshot,
+		Runnable fingerScreenshot) {
 		VoicechatServerApi api = TestVoicePlugin.serverApi;
 		// The voices played before this started loading the speech model.
 		context.waitFor(client -> SpeechModel.status() == SpeechModel.Status.READY || SpeechModel.status() == SpeechModel.Status.UNAVAILABLE, TIMEOUT_TICKS);
 		check(SpeechModel.status() == SpeechModel.Status.READY, "speech recognition started (" + SpeechModel.status() + ", " + SpeechModel.problem() + ")");
 		check(context.computeOnClient(client -> FartEffects.startedCount()) == fartsBeforeVoice, "the test tones in voice chat didn't cause a fart");
 
-		// 1. "... fart ...": our character farts.
+		// "... fart ...": our character farts.
 		int before = context.computeOnClient(client -> FartEffects.startedCount());
-		AudioPlayer sentence = say(world, api, clips.resolve("p2_com.wav"));
+		AudioPlayer sentence = say(world, api, clips.resolve("fart_sentence.wav"));
 		context.waitFor(client -> FartEffects.startedCount() > before, TIMEOUT_TICKS);
 		check(context.computeOnClient(client -> FartEffects.isFarting(client.player.getUUID())), "saying \"fart\" in voice chat made our character fart");
 		context.waitTicks(6);
-		screenshot.run();
+		fartScreenshot.run();
 		context.waitFor(client -> !sentence.isPlaying(), TIMEOUT_TICKS);
 		context.waitTicks(40);
 
-		// 2. A sentence with "farm" in it: nobody farts.
-		int beforeOther = context.computeOnClient(client -> FartEffects.startedCount());
-		AudioPlayer other = say(world, api, clips.resolve("n1_com.wav"));
-		context.waitFor(client -> !other.isPlaying(), TIMEOUT_TICKS);
-		context.waitTicks(40); // time for the last words to be recognized
-		check(context.computeOnClient(client -> FartEffects.startedCount()) == beforeOther, "a sentence with \"farm\" in it didn't cause a fart");
+		// "well fuck you then": the middle finger, seen from the front.
+		context.runOnClient(client -> client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_FRONT));
+		int fingers = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
+		AudioPlayer insult = say(world, api, clips.resolve("fuck_you_sentence.wav"));
+		context.waitFor(client -> MiddleFingerEmote.startedCount() > fingers, TIMEOUT_TICKS);
+		check(context.computeOnClient(client -> MiddleFingerEmote.isActive(client.player.getUUID())),
+			"saying \"fuck you\" in voice chat made our character show the middle finger");
+		context.waitTicks(8);
+		fingerScreenshot.run();
+		context.waitFor(client -> !insult.isPlaying(), TIMEOUT_TICKS);
+		context.waitTicks(60);
+
+		// Lookalikes: "farm" and "thank you" do nothing.
+		int fartsBefore = context.computeOnClient(client -> FartEffects.startedCount());
+		int fingersBefore = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
+		for (String clip : List.of("farm_sentence.wav", "thank_you_sentence.wav")) {
+			AudioPlayer other = say(world, api, clips.resolve(clip));
+			context.waitFor(client -> !other.isPlaying(), TIMEOUT_TICKS);
+			context.waitTicks(40); // time for the last words to be recognized
+		}
+		check(context.computeOnClient(client -> FartEffects.startedCount()) == fartsBefore, "a sentence with \"farm\" in it didn't cause a fart");
+		check(context.computeOnClient(client -> MiddleFingerEmote.startedCount()) == fingersBefore, "\"thank you\" didn't cause a middle finger");
 	}
 
 	/** Plays a 48 kHz mono WAV file through a voice chat channel attached to our own player. */

@@ -61,6 +61,10 @@ public final class CharacterLibrary {
 		EXAMPLES.put("Robot 3D", modelFiles("Robot"));
 		EXAMPLES.put("Frog 3D", modelFiles("Frog"));
 		EXAMPLES.put("Burger", modelFiles("Burger"));
+		EXAMPLES.put("Penguin", modelFiles("Penguin"));
+		EXAMPLES.put("SpongeBob", modelFiles("SpongeBob"));
+		EXAMPLES.put("Skinny Alien", modelFiles("Skinny Alien"));
+		EXAMPLES.put("Blue", modelFiles("Blue"));
 		// Versions 1 and 2 had the robot and the frog as skins.
 		REPLACES.put("Robot 3D", Map.of(
 			"Robot.png", "c25c1b4982abf476bbd50ea787b432fda2d01fe0ee381a091ca265e12408e539",
@@ -68,10 +72,22 @@ public final class CharacterLibrary {
 		REPLACES.put("Frog 3D", Map.of(
 			"Frog.png", "1c35f4608a6d53a3543d3697ea4e2ccb06341bca0cfbeaf2aa3db4fec9ef8979",
 			"Frog.json", "8bb9b34a81b6e0ef6d0c99684c19e28f3f67d67069bed01c0f1d93bbcc3aaa35"));
-		// The alien of version 2.
-		OUTDATED.put("Alien/model.obj", Set.of("766b2cf98270f83448615a0797d88517bb7c3f8da8b60b8b8598e9a06fad711d"));
-		OUTDATED.put("Alien/character.json", Set.of("3fea26c095af1f961822a9452acd2629e6a15f8901574d41e680f38d099fe879"));
-		OUTDATED.put("Alien/icon.png", Set.of("e32bbc58b8f7ec558d785b703e144add66e85e3f26ebda6fe8b7fc39a79bff6b"));
+		// Versions 2 and 3 (version 4 added the angry faces and middle fingers).
+		OUTDATED.put("Alien/model.obj", Set.of("766b2cf98270f83448615a0797d88517bb7c3f8da8b60b8b8598e9a06fad711d",
+			"47cf348d5186e5aff86e8f73cc54829934f45617b326e8591de343501b466897"));
+		OUTDATED.put("Alien/character.json", Set.of("3fea26c095af1f961822a9452acd2629e6a15f8901574d41e680f38d099fe879",
+			"bb464f8eee7d1245229b222a61b6bae1491c5cece7dc4b4d5106c15751adfd1c"));
+		OUTDATED.put("Alien/icon.png", Set.of("e32bbc58b8f7ec558d785b703e144add66e85e3f26ebda6fe8b7fc39a79bff6b",
+			"23b0481b472af8e5d35b4af5a351c83dca0bcb099f9c414741913c6330182c32"));
+		OUTDATED.put("Burger/model.obj", Set.of("a09753c907c2239b1c7d8f003dc6e8573e8e734391aaa995b346567ad55852ad"));
+		OUTDATED.put("Burger/character.json", Set.of("1f4780eb0b6fd163ea909dbe6cee7e5ee254168d19e5011d14f74d56e3232994"));
+		OUTDATED.put("Burger/icon.png", Set.of("a6a9e7b13ddaeacd432931aab27f489f6f971af0e70e7bf27d34d864c206f26f"));
+		OUTDATED.put("Frog/model.obj", Set.of("76c7eb1cc19b849eac0c8526073f493e5a98d5d45a7aa31c40fc151e276b1d4a"));
+		OUTDATED.put("Frog/character.json", Set.of("fee98f11449c4e4cf878302f911db60be3fca332c8387833fa39081908bfd234"));
+		OUTDATED.put("Frog/icon.png", Set.of("62ab7cb7dc0b05b92519d7306bfbbd2d71808bd4c186c5c961e5a9dddda441d9"));
+		OUTDATED.put("Robot/model.obj", Set.of("5a9c2c6bce5962d45836631cfab7843f0b66983407325c4352abba8758d37fe9"));
+		OUTDATED.put("Robot/character.json", Set.of("cc78b6c6fc309b0b00fdbae8a28636bc652b7c309ff8e3836e73637968fb306a"));
+		OUTDATED.put("Robot/icon.png", Set.of("4cc653f27f0fda1db3481422c5db3b5f27ebf5e4f398ddfb3911578eb4a66c62"));
 	}
 
 	private static List<String> modelFiles(String folder) {
@@ -282,7 +298,9 @@ public final class CharacterLibrary {
 					// Installed by an older version of the mod: bring it up to date, unless it was changed.
 					for (String file : example.getValue()) {
 						Set<String> oldVersions = OUTDATED.get(file);
-						if (oldVersions != null && oldVersions.contains(sha256(FOLDER.resolve(file)))) {
+						String current = sha256(FOLDER.resolve(file));
+						// current is null for files the user deleted (and Set.of(...).contains(null) would throw).
+						if (current != null && oldVersions != null && oldVersions.contains(current) && !current.equals(bundledSha256(mod.get(), file))) {
 							copyExample(mod.get(), file, true);
 							changed = true;
 						}
@@ -324,6 +342,11 @@ public final class CharacterLibrary {
 				PlayerCharactersClient.LOGGER.info("Removed the old example {}, it is now a 3D character", file);
 			}
 		}
+	}
+
+	private static @Nullable String bundledSha256(ModContainer mod, String file) {
+		Optional<Path> source = mod.findPath("assets/" + PlayerCharactersClient.MOD_ID + "/examples/" + file);
+		return source.isPresent() ? sha256(source.get()) : null;
 	}
 
 	/** SHA-256 of a file as lowercase hex, or null if it doesn't exist or can't be read. */

@@ -19,4 +19,14 @@ public interface CharacterRenderState {
 	float playercharacters$fart();
 
 	void playercharacters$setFart(float fart);
+
+	/** How far the right arm is raised for the middle finger, from 0 to 1. */
+	float playercharacters$middleFinger();
+
+	void playercharacters$setMiddleFinger(float raise);
+
+	/** Whether the character shows its angry face. */
+	boolean playercharacters$mad();
+
+	void playercharacters$setMad(boolean mad);
 }
