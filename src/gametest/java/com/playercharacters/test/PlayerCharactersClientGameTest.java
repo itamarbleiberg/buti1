@@ -8,11 +8,14 @@ import com.playercharacters.character.CharacterModel;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
+import com.playercharacters.effects.CigaretteSmoke;
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.FartScreen;
 import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.gui.CharacterMenuScreen;
 import com.playercharacters.gui.CharacterPickerScreen;
 import com.playercharacters.render.CharacterRenderState;
+import com.playercharacters.render.FirstPersonHands;
 import com.playercharacters.voice.TalkTracker;
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,8 +57,9 @@ import org.lwjgl.glfw.GLFW;
  * menus. Screenshots end up in run/screenshots.
  * <p>
  * Optional system properties: {@code playercharacters.test.speechClips}, a folder with fart_sentence.wav,
- * farm_sentence.wav, fuck_you_sentence.wav and thank_you_sentence.wav (48 kHz mono);
- * {@code playercharacters.test.v2jar} and {@code playercharacters.test.v3jar}, older jars of the mod, to check that
+ * farm_sentence.wav, fuck_you_sentence.wav, fuck_off_sentence.wav, back_off_sentence.wav and thank_you_sentence.wav
+ * (48 kHz mono);
+ * {@code playercharacters.test.v2jar}, {@code playercharacters.test.v3jar} and {@code playercharacters.test.v4jar}, older jars of the mod, to check that
  * characters folders made by them are brought up to date.
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -87,6 +91,10 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		String v3jar = System.getProperty("playercharacters.test.v3jar");
 		if (v3jar != null) {
 			checkUpgradeFromVersion3(context, Path.of(v3jar));
+		}
+		String v4jar = System.getProperty("playercharacters.test.v4jar");
+		if (v4jar != null) {
+			checkUpgradeFromVersion4(context, Path.of(v4jar));
 		}
 		addSkinCharacter(context);
 
@@ -133,7 +141,9 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				model.setupAnim(avatar);
 				return new float[] {model.body.zRot, model.leftLeg.zRot};
 			});
-			check(Math.abs(rock[0] - Math.toRadians(9)) < 0.01 && Math.abs(rock[1] - rock[0]) < 0.2, "the penguin waddles (body tilted " + Math.toDegrees(rock[0]) + " degrees)");
+			float waddle = CharacterLibrary.get("Penguin").model().extras().waddleRadians();
+			check(Math.abs(rock[0] - waddle) < 0.01 && waddle > 0.1F && Math.abs(rock[1] - rock[0]) < 0.2,
+				"the penguin waddles (body tilted " + Math.toDegrees(rock[0]) + " degrees)");
 
 			// Closer, from the side, looking a little down: shows the held sword and the open jaw.
 			setChoice(context, Choice.character("Alien"));
@@ -204,6 +214,17 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				context.waitTicks(56);
 				check(!context.computeOnClient(client -> MiddleFingerEmote.isActive(FRIEND)), id + " calms down again");
 			}
+			// The penguin smokes: a thin line of smoke rises from its cigarette.
+			setChoice(context, Choice.character("Penguin"));
+			int puffs = context.computeOnClient(client -> CigaretteSmoke.puffCount());
+			context.runOnClient(client -> {
+				client.options.fov().set(20);
+				client.player.setXRot(6.0F);
+			});
+			context.waitTicks(40);
+			check(context.computeOnClient(client -> CigaretteSmoke.puffCount()) > puffs + 5, "smoke rises from the penguin's cigarette");
+			context.takeScreenshot("49-friend-penguin-smoking");
+			context.runOnClient(client -> client.options.fov().set(40));
 			context.runOnClient(client -> {
 				client.options.hideGui = false;
 				client.player.setXRot(0.0F);
@@ -282,6 +303,11 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			context.waitTicks(8);
 			context.takeScreenshot("55-self-middle-finger-from-chat");
 			context.waitTicks(60);
+			int fingersBeforeOff = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
+			context.runOnClient(client -> client.player.connection.sendChat("oh just f off"));
+			context.waitFor(client -> MiddleFingerEmote.startedCount() > fingersBeforeOff, 100);
+			check(true, "typing \"f off\" in chat made our character show the middle finger");
+			context.waitTicks(68);
 			context.runOnClient(client -> client.options.setCameraType(CameraType.THIRD_PERSON_BACK));
 
 			// With farts turned off in the menu, nothing happens.
@@ -317,11 +343,41 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			} else {
 				System.out.println("[playercharacters-test] Simple Voice Chat not installed, skipping the voice chat check");
 			}
-			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
+			// First person: a 3D character sees its own arm, and its own emotes.
+			context.runOnClient(client -> {
+				client.options.setCameraType(CameraType.FIRST_PERSON);
+				client.player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+				client.player.setXRot(15.0F);
+			});
+			shot = 60;
+			for (String id : List.of("Alien", "Blue", "Penguin", "Tester")) {
+				context.runOnClient(client -> CharacterSettings.get().setChoice(self, client.getUser().getName(), Choice.character(id)));
+				context.waitTicks(3);
+				int arms = context.computeOnClient(client -> FirstPersonHands.armsDrawn());
+				context.waitTicks(3);
+				boolean model = !id.equals("Tester");
+				check((context.computeOnClient(client -> FirstPersonHands.armsDrawn()) > arms) == model,
+					model ? "in first person, " + id + "'s own arm is drawn" : "in first person, a skin character keeps Minecraft's arm");
+				context.takeScreenshot(String.format("%02d-first-person-%s-arm", shot++, id.toLowerCase()));
+				int fingers = context.computeOnClient(client -> FirstPersonHands.fingersDrawn());
+				context.runOnClient(client -> MiddleFingerEmote.start(self));
+				context.waitTicks(8);
+				check(context.computeOnClient(client -> FirstPersonHands.fingersDrawn()) > fingers, "in first person, " + id + " sees its own middle finger");
+				context.takeScreenshot(String.format("%02d-first-person-%s-middle-finger", shot++, id.toLowerCase()));
+				context.waitTicks(56);
+			}
+			int frames = context.computeOnClient(client -> FartScreen.framesDrawn());
+			context.runOnClient(client -> FartEffects.start(self));
+			context.waitTicks(10);
+			check(context.computeOnClient(client -> FartScreen.isShowing()) && context.computeOnClient(client -> FartScreen.framesDrawn()) > frames,
+				"farting in first person turns the screen green");
+			context.takeScreenshot(String.format("%02d-first-person-fart-screen", shot++));
+			context.waitTicks(60);
+			check(!context.computeOnClient(client -> FartScreen.isShowing()), "the green screen goes away again");
 
 			Path config = FabricLoader.getInstance().getConfigDir().resolve("playercharacters.json");
 			String saved = readString(config);
-			check(saved.contains("\"character:Burger\"") && saved.contains(FRIEND.toString()) && saved.contains("\"fartDetection\": true")
+			check(saved.contains("\"character:Tester\"") && saved.contains(FRIEND.toString()) && saved.contains("\"fartDetection\": true")
 				&& saved.contains("\"middleFinger\": true"),
 				"choices saved to playercharacters.json:\n" + saved);
 		}
@@ -330,7 +386,11 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 	/** The examples: eight 3D characters, put in the characters folder by the mod. */
 	private static void checkExamples(ClientGameTestContext context) {
 		List<String> ids = context.computeOnClient(client -> CharacterLibrary.all().stream().map(PlayerCharacter::id).toList());
-		check(ids.equals(List.of("Alien", "Blue", "Burger", "Frog", "Penguin", "Robot", "Skinny Alien", "SpongeBob")), "example characters loaded, got " + ids);
+		// Sorted by name: Blue is called "67" now.
+		check(ids.equals(List.of("Blue", "Alien", "Burger", "Frog", "Penguin", "Robot", "Skinny Alien", "SpongeBob")), "example characters loaded, got " + ids);
+		check(CharacterLibrary.get("Blue").displayName().equals("67"), "Blue is called 67, got " + CharacterLibrary.get("Blue").displayName());
+		check(CharacterLibrary.get("Blue").model().jawOpenRadians() < 0.0F, "the top of the 7 lifts up when 67 talks");
+		check(CharacterLibrary.get("Penguin").model().extras().smoke() != null, "the penguin has a cigarette to smoke");
 		for (String id : MODELS) {
 			PlayerCharacter character = CharacterLibrary.get(id);
 			check(character.isModel() && character.model().quadCount() > 5000 && character.icon() != null,
@@ -430,6 +490,54 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		check(readString(folder.resolve("Robot").resolve("model.obj")).contains("o middle_finger"), "upgrade: the robot of version 3 got its middle finger");
 		check(Files.isDirectory(folder.resolve("Penguin")) && Files.isDirectory(folder.resolve("Blue")), "upgrade: the new characters were added");
 		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8, "upgrade from 3: eight characters and no problems");
+	}
+
+	/**
+	 * Puts all eight examples back the way version 4 left them, with the old penguin's settings changed by the "user":
+	 * the old Blue, SpongeBob and skinny alien are updated, and the changed penguin settings are kept.
+	 */
+	private static void checkUpgradeFromVersion4(ClientGameTestContext context, Path v4jar) {
+		Path folder = CharacterLibrary.folder();
+		context.runOnClient(client -> {
+			try (java.nio.file.FileSystem jar = java.nio.file.FileSystems.newFileSystem(v4jar)) {
+				for (String example : List.of("Alien", "Robot", "Frog", "Burger", "Penguin", "SpongeBob", "Skinny Alien", "Blue")) {
+					for (String file : List.of("model.obj", "character.json", "icon.png")) {
+						Files.copy(jar.getPath("assets/playercharacters/examples/" + example + "/" + file), folder.resolve(example).resolve(file),
+							java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+					}
+				}
+				Files.writeString(folder.resolve("Penguin").resolve("character.json"), readString(folder.resolve("Penguin").resolve("character.json"))
+					.replace("\"name\": \"Penguin\"", "\"name\": \"Pingu\""));
+			} catch (IOException e) {
+				throw new AssertionError("Couldn't set up the version 4 folder", e);
+			}
+			CharacterLibrary.reload();
+		});
+		check(CharacterLibrary.get("Blue").displayName().equals("67") && readString(folder.resolve("Blue").resolve("model.obj")).contains("o jaw"),
+			"upgrade: Blue of version 4 became 67");
+		check(readString(folder.resolve("SpongeBob").resolve("model.obj")).equals(bundled(context, "SpongeBob/model.obj"))
+			&& readString(folder.resolve("Skinny Alien").resolve("model.obj")).equals(bundled(context, "Skinny Alien/model.obj")),
+			"upgrade: SpongeBob and the skinny alien of version 4 were updated");
+		check(CharacterLibrary.get("Penguin").displayName().equals("Pingu") && CharacterLibrary.get("Penguin").model().extras().smoke() == null,
+			"upgrade: the penguin with changed settings was kept as it was, model too");
+		context.runOnClient(client -> {
+			try (InputStream in = Files.newInputStream(FabricLoader.getInstance().getModContainer("playercharacters").orElseThrow()
+				.findPath("assets/playercharacters/examples/Penguin/character.json").orElseThrow())) {
+				Files.write(folder.resolve("Penguin").resolve("character.json"), in.readAllBytes());
+			} catch (IOException e) {
+				throw new AssertionError(e);
+			}
+			CharacterLibrary.reload();
+		});
+		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8 && CharacterLibrary.get("Penguin").model().extras().smoke() != null
+			&& readString(folder.resolve("Penguin").resolve("model.obj")).equals(bundled(context, "Penguin/model.obj")),
+			"upgrade from 4: once the settings match again the penguin is updated too, and it smokes");
+	}
+
+	/** An example file as the mod has it. */
+	private static String bundled(ClientGameTestContext context, String file) {
+		return context.computeOnClient(client -> readString(FabricLoader.getInstance().getModContainer("playercharacters").orElseThrow()
+			.findPath("assets/playercharacters/examples/" + file).orElseThrow()));
 	}
 
 	/** A skin character made from Minecraft's own Steve skin, and what happens when a skin has a 3D character's name. */

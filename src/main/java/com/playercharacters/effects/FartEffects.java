@@ -69,6 +69,10 @@ public final class FartEffects {
 		}
 		ACTIVE.put(player, new Fart());
 		started++;
+		Minecraft client = Minecraft.getInstance();
+		if (client.player != null && client.player.getUUID().equals(player)) {
+			FartScreen.start(); // your own fart: in first person, your screen goes green
+		}
 	}
 
 	public static boolean isFarting(UUID player) {

@@ -41,12 +41,7 @@ public final class VanillaEmoteParts {
 			poseStack.pushPose();
 			model.root().translateAndRotate(poseStack);
 			model.rightArm.translateAndRotate(poseStack);
-			float x = state.skin.model() == PlayerModelType.SLIM ? -0.5F : -1.0F; // the middle of the arm
-			Identifier skin = state.skin.body().texturePath();
-			// One pixel thick, sticking out of the front of the hand. With the arm raised forward, that is up.
-			collector.submitCustomGeometry(poseStack, RenderTypes.entityCutoutNoCull(skin), (pose, buffer) ->
-				box(pose, buffer, new Vector3f(x, 9.4F, -3.6F), new Vector3f(1, 0, 0), new Vector3f(0, 1, 0), new Vector3f(0.5F, 0.5F, 1.6F),
-					-1, HAND_U, HAND_V, light, overlay));
+			submitFinger(poseStack, collector, state.skin.body().texturePath(), state.skin.model() == PlayerModelType.SLIM, light, overlay);
 			poseStack.popPose();
 		}
 
@@ -67,6 +62,17 @@ public final class VanillaEmoteParts {
 			});
 			poseStack.popPose();
 		}
+	}
+
+	/**
+	 * The finger, in the right arm's own space: one pixel thick, sticking out of the front of the hand and colored like
+	 * the hand. With the arm raised forward, it points up.
+	 */
+	public static void submitFinger(PoseStack poseStack, SubmitNodeCollector collector, Identifier skin, boolean slim, int light, int overlay) {
+		float x = slim ? -0.5F : -1.0F; // the middle of the arm
+		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutoutNoCull(skin), (pose, buffer) ->
+			box(pose, buffer, new Vector3f(x, 9.4F, -3.6F), new Vector3f(1, 0, 0), new Vector3f(0, 1, 0), new Vector3f(0.5F, 0.5F, 1.6F),
+				-1, HAND_U, HAND_V, light, overlay));
 	}
 
 	/**

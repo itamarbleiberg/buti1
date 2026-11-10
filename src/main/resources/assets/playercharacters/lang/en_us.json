@@ -16,7 +16,7 @@
 	"playercharacters.menu.farts": "Farts",
 	"playercharacters.menu.farts.tooltip": "When a player says \"fart\" in voice chat (or types it in chat), they bend over and fart. The speech recognition runs on your computer: no audio is sent anywhere.",
 	"playercharacters.menu.middle_finger": "Middle finger",
-	"playercharacters.menu.middle_finger.tooltip": "When a player says \"fuck you\" in voice chat (or types it in chat), their character shows the middle finger and looks mad for a few seconds.",
+	"playercharacters.menu.middle_finger.tooltip": "When a player says \"fuck you\" or \"fuck off\" in voice chat (or types it in chat), their character shows the middle finger and looks mad for a few seconds.",
 	"playercharacters.menu.open_folder": "Characters folder",
 	"playercharacters.menu.open_folder.tooltip": "Put 3D model folders or skin PNG files in this folder, then click Reload.",
 	"playercharacters.menu.reload": "Reload",
@@ -28,7 +28,7 @@
 	"playercharacters.status.no_voice_chat": "Simple Voice Chat not found",
 	"playercharacters.status.no_voice_chat.tooltip": "Install Simple Voice Chat to make mouths move when players talk.",
 	"playercharacters.status.no_speech": "Voice emotes unavailable",
-	"playercharacters.status.no_speech.tooltip": "Speech recognition couldn't start on this computer, so saying \"fart\" or \"fuck you\" does nothing (typing them in chat still works). Reason: %s",
+	"playercharacters.status.no_speech.tooltip": "Speech recognition couldn't start on this computer, so saying \"fart\", \"fuck you\" or \"fuck off\" does nothing (typing them in chat still works). Reason: %s",
 
 	"playercharacters.choice.default": "Default: %s",
 	"playercharacters.choice.own": "Own skin",

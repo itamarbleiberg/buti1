@@ -1,16 +1,16 @@
 {
-  "name": "Blue",
+  "name": "67",
   "size": 1.0,
-  "jaw_angle": 9,
-  "butt": [0, 0.62, -0.235],
+  "jaw_angle": -30,
+  "butt": [0, 0.62, -0.07],
   "head_turn": 0,
   "parts": {
-    "head": { "pivot": [0, 0.55, 0] },
-    "jaw": { "pivot": [0, 0.86, -0.36] },
-    "body": { "pivot": [0, 0.55, 0] },
-    "right_arm": { "pivot": [-0.27, 0.88, 0], "hand": [-0.385, 0.53, 0.08] },
-    "left_arm": { "pivot": [0.27, 0.88, 0], "hand": [0.385, 0.53, 0.08] },
-    "right_leg": { "pivot": [-0.13, 0.55, 0] },
-    "left_leg": { "pivot": [0.13, 0.55, 0] }
+    "head": { "pivot": [0, 0.5, 0] },
+    "jaw": { "pivot": [0.198, 0.98, -0.06] },
+    "body": { "pivot": [0, 0.5, 0] },
+    "right_arm": { "pivot": [-0.39, 0.89, 0], "hand": [-0.45, 0.44, 0.02] },
+    "left_arm": { "pivot": [0.39, 0.89, 0], "hand": [0.45, 0.44, 0.02] },
+    "right_leg": { "pivot": [-0.198, 0.5, 0] },
+    "left_leg": { "pivot": [0.198, 0.5, 0] }
   }
 }

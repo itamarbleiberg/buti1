@@ -21,6 +21,7 @@ import net.minecraft.client.renderer.entity.layers.WingsLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.ARGB;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -108,6 +109,12 @@ public final class CharacterModelRenderer {
 			poseStack.mulPose(new Quaternionf().rotationZYX(follows.zRot, follows.yRot, follows.xRot));
 		}
 		poseStack.translate(-pivot.x, -pivot.y, -pivot.z);
+	}
+
+	/** Draws one part as it is, with the current pose (for example an arm in first person). */
+	public static void submitAlone(CharacterModel model, Part part, PoseStack poseStack, SubmitNodeCollector collector, int light) {
+		collector.submitCustomGeometry(poseStack, RenderTypes.entityCutout(model.texture()),
+			(pose, buffer) -> emit(part, pose, buffer, light, OverlayTexture.NO_OVERLAY, -1));
 	}
 
 	private static void emit(CharacterModel.Part part, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int tint) {

@@ -4,7 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
 import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.config.CharacterSettings;
+import com.playercharacters.effects.CigaretteSmoke;
 import com.playercharacters.effects.FartEffects;
+import com.playercharacters.effects.FartScreen;
 import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.gui.CharacterMenuScreen;
 import java.util.regex.Pattern;
@@ -13,6 +15,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -27,9 +31,9 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 	/** "fart" as a word of its own in a chat message (also "farts", "farted" and "farting"). */
 	private static final Pattern FART_IN_CHAT = Pattern.compile("(?<![\\p{L}\\p{N}_])fart(s|ed|ing)?(?![\\p{L}\\p{N}_])",
 		Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-	/** "fuck you", also written "fck you", "f*ck u", "f you" and similar. */
-	private static final Pattern FUCK_YOU_IN_CHAT = Pattern.compile("(?<![\\p{L}\\p{N}_])(fuck|fuk|fck|fk|f\\*+c?k?|f)\\s+(you|u|ya)(?![\\p{L}\\p{N}_])",
-		Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+	/** "fuck you" or "fuck off", also written "fck you", "f*ck u", "f off" and similar. */
+	private static final Pattern FUCK_YOU_IN_CHAT = Pattern.compile(
+		"(?<![\\p{L}\\p{N}_])(fuck|fuk|fck|fk|f\\*+c?k?|f)\\s+(you|u|ya|off)(?![\\p{L}\\p{N}_])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
 	private static KeyMapping openMenuKey;
 	private static KeyMapping toggleMouthsKey;
@@ -47,6 +51,8 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		// Textures can only be created once the game window exists.
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> CharacterLibrary.reload());
 		ClientTickEvents.END_CLIENT_TICK.register(PlayerCharactersClient::onEndTick);
+		// The green fart screen goes over the world, under the crosshair and the hotbar.
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, FartScreen.ID, FartScreen::render);
 
 		// Saying the emote phrases in voice chat is handled by VoiceEmoteDetector. Typing them in chat works too.
 		ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
@@ -81,6 +87,8 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		}
 
 		FartEffects.tick(client);
+		FartScreen.tick(client);
 		MiddleFingerEmote.tick(client);
+		CigaretteSmoke.tick(client);
 	}
 }

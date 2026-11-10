@@ -88,6 +88,19 @@ public final class CharacterLibrary {
 		OUTDATED.put("Robot/model.obj", Set.of("5a9c2c6bce5962d45836631cfab7843f0b66983407325c4352abba8758d37fe9"));
 		OUTDATED.put("Robot/character.json", Set.of("cc78b6c6fc309b0b00fdbae8a28636bc652b7c309ff8e3836e73637968fb306a"));
 		OUTDATED.put("Robot/icon.png", Set.of("4cc653f27f0fda1db3481422c5db3b5f27ebf5e4f398ddfb3911578eb4a66c62"));
+		// Version 4 (version 5 turned Blue into 67 and remade the penguin, SpongeBob and the skinny alien).
+		OUTDATED.put("Blue/model.obj", Set.of("e5ca568036e84bb2a75123c740b32a42409496745300f16308eb63097f864c16"));
+		OUTDATED.put("Blue/character.json", Set.of("958ed595990e0bd011a5a0efef780c669694cd4e61788ecb8cde56d1f96a4bb3"));
+		OUTDATED.put("Blue/icon.png", Set.of("6597777a9e1ac2f926b8b3be5b0e9ba715b0a775ffd19be12d66e42598c88034"));
+		OUTDATED.put("Penguin/model.obj", Set.of("e70f0a2279b9c00a0d59f4a7a2f96cedb3948c184bb4773e352f98d60e5b4d87"));
+		OUTDATED.put("Penguin/character.json", Set.of("30ca3ddc01601dfc7377d18e07fbf1922b787f9235a2203bec9f6b647463fefd"));
+		OUTDATED.put("Penguin/icon.png", Set.of("b09bef1d6d1cb4bbeae00366ab62c55658d0b5107732ae171b9fbb0db70c8d04"));
+		OUTDATED.put("SpongeBob/model.obj", Set.of("1122acd0920f402064e6fc85508c0a9bb9d3e14f6beadae915564e23876e1e16"));
+		OUTDATED.put("SpongeBob/character.json", Set.of("bbbc39fd75cc99ab38f99da0aa2f68bde632200e2df0834e4d66eaf8ab2cdebf"));
+		OUTDATED.put("SpongeBob/icon.png", Set.of("10ae4ab121fa2f604baaab591c216fd3343ab38f81879f4223bb5d65edbe10d0"));
+		OUTDATED.put("Skinny Alien/model.obj", Set.of("6d2cca091e4c6a356ae54dd29af9d5e32ac73241326ce22d96d634ba377d55bd"));
+		OUTDATED.put("Skinny Alien/character.json", Set.of("def4b367e54a432310b0646e8d92cc6cd84c71588b2812c11b9413f7c01b3e04"));
+		OUTDATED.put("Skinny Alien/icon.png", Set.of("be0d58f969c9b1606511fee68c3a75f779a939d8551609cf30ac875ba12e0403"));
 	}
 
 	private static List<String> modelFiles(String folder) {
@@ -295,12 +308,25 @@ public final class CharacterLibrary {
 					}
 					changed = true;
 				} else {
-					// Installed by an older version of the mod: bring it up to date, unless it was changed.
+					// Installed by an older version of the mod: bring it up to date. If any of its files was changed, the
+					// whole character is left alone, so a new model never ends up with old settings or the other way around.
+					List<String> outdated = new ArrayList<>();
+					boolean edited = false;
 					for (String file : example.getValue()) {
-						Set<String> oldVersions = OUTDATED.get(file);
 						String current = sha256(FOLDER.resolve(file));
-						// current is null for files the user deleted (and Set.of(...).contains(null) would throw).
-						if (current != null && oldVersions != null && oldVersions.contains(current) && !current.equals(bundledSha256(mod.get(), file))) {
+						if (current == null || current.equals(bundledSha256(mod.get(), file))) {
+							continue; // deleted by the user, or already up to date
+						}
+						if (OUTDATED.getOrDefault(file, Set.of()).contains(current)) {
+							outdated.add(file);
+						} else {
+							edited = true;
+						}
+					}
+					if (edited && !outdated.isEmpty()) {
+						PlayerCharactersClient.LOGGER.info("Not updating the example {} because some of its files were changed", example.getKey());
+					} else {
+						for (String file : outdated) {
 							copyExample(mod.get(), file, true);
 							changed = true;
 						}

@@ -52,9 +52,11 @@ public final class CharacterModel {
 	 * @param middleFinger   a right arm making the gesture, drawn instead of the right arm during the emote
 	 * @param waddleRadians  how far the whole character rocks from side to side while walking
 	 * @param headTurn       how much of the player's head turning the head copies, from 0 to 1
+	 * @param smoke          model space: where smoke rises from (like the tip of a cigarette), moving with the head
 	 */
-	public record Extras(Map<Bone, Part> madParts, Map<Bone, Part> calmParts, @Nullable Part middleFinger, float waddleRadians, float headTurn) {
-		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F);
+	public record Extras(Map<Bone, Part> madParts, Map<Bone, Part> calmParts, @Nullable Part middleFinger, float waddleRadians, float headTurn,
+		@Nullable Vector3f smoke) {
+		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null);
 
 		public Extras {
 			madParts = madParts.isEmpty() ? Map.of() : new EnumMap<>(madParts);

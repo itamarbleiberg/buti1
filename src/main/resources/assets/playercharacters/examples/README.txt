@@ -9,7 +9,7 @@ There are two kinds of characters.
 
 
 3D CHARACTERS (like the Alien, Robot, Frog, Burger, Penguin, SpongeBob, Skinny Alien
-and Blue)
+and 67, which is in the folder "Blue")
 -------------------------------------------------------------------------------------
 A folder with these files. The folder name is the character's name.
 
@@ -60,10 +60,12 @@ character.json, for example:
   butt       where the fart cloud comes out (default: the middle of the body's back,
              just above the legs)
   waddle     degrees the character rocks from side to side while walking (the
-             Penguin uses 9)
+             Penguin uses 8)
   head_turn  how much of the player's looking around the head copies, from 0 (the
              head stays still) to 1 (all of it, the default). SpongeBob uses 0.3,
              because his whole sponge is his head.
+  smoke      where a thin line of smoke rises from, moving with the head, like the
+             tip of the Penguin's cigarette (optional)
   parts      "pivot" is the joint a part turns around, "hand" is where held items go.
              Both are in the model's own coordinates. Without them, they are guessed
              from the size of each part. A part can have a pivot without being in the
@@ -108,9 +110,13 @@ A skin and a 3D folder can't have the same name. If they do, the 3D one is used.
 EMOTES
 ------
 When a player says "fart" in voice chat (or types it in chat), their character bends
-over and farts. When they say "fuck you", their character shows the middle finger and
-looks mad for a few seconds. This works for every character, and for players in their
-own skin. Turn them off with the "Farts" and "Middle finger" buttons in the character
-menu.
+over and farts. When they say "fuck you" or "fuck off", their character shows the middle
+finger and looks mad for a few seconds. This works for every character, and for players
+in their own skin. Turn them off with the "Farts" and "Middle finger" buttons in the
+character menu.
+
+In first person you see your 3D character's own arm. When you show the middle finger,
+your fist comes up in front of you, and when you fart, your screen turns green and
+bubbles pop.
 
 The example characters can be deleted. They won't come back.

@@ -30,8 +30,8 @@ import org.jspecify.annotations.Nullable;
  *       For the middle finger emote: objects named "mad_&lt;part&gt;" are only drawn while the character is mad,
  *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
- *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn
- *       and pivots.</li>
+ *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn,
+ *       smoke and pivots.</li>
  *   <li>{@code icon.png} - optional picture for the menus.</li>
  * </ul>
  * Models are expected in Blender's usual export orientation: Y up, facing +Z, 1 unit = 1 block.
@@ -60,6 +60,7 @@ final class ModelCharacterLoader {
 		float @Nullable [] butt;
 		@Nullable Float waddle;
 		@Nullable Float head_turn;
+		float @Nullable [] smoke;
 		@Nullable Map<String, PartOptions> parts;
 	}
 
@@ -228,7 +229,8 @@ final class ModelCharacterLoader {
 		}
 		float waddle = options.waddle == null ? 0.0F : Math.max(0, Math.min(30, options.waddle));
 		float headTurn = options.head_turn == null ? 1.0F : Math.max(0, Math.min(1, options.head_turn));
-		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn);
+		Vector3f smoke = options.smoke != null && options.smoke.length == 3 ? t.point(options.smoke[0], options.smoke[1], options.smoke[2]) : null;
+		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke);
 		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt, height * scale, extras);
 	}
 

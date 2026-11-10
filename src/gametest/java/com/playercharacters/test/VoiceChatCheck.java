@@ -25,7 +25,7 @@ import net.minecraft.world.entity.Entity;
 /**
  * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client,
  * for all three ways voice arrives: a nearby entity, a static (group-style) channel, and yourself. With recorded
- * sentences, also checks that saying "fart" and "fuck you" is recognized. Only loaded when Simple Voice Chat is installed.
+ * sentences, also checks that saying "fart", "fuck you" and "fuck off" is recognized. Only loaded when Simple Voice Chat is installed.
  */
 @SuppressWarnings("UnstableApiUsage")
 final class VoiceChatCheck {
@@ -129,16 +129,24 @@ final class VoiceChatCheck {
 		context.waitFor(client -> !insult.isPlaying(), TIMEOUT_TICKS);
 		context.waitTicks(60);
 
+		// "why don't you fuck off": the middle finger too.
+		int fingersOff = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
+		AudioPlayer offSentence = say(world, api, clips.resolve("fuck_off_sentence.wav"));
+		context.waitFor(client -> MiddleFingerEmote.startedCount() > fingersOff, TIMEOUT_TICKS);
+		check(true, "saying \"fuck off\" in voice chat made our character show the middle finger");
+		context.waitFor(client -> !offSentence.isPlaying(), TIMEOUT_TICKS);
+		context.waitTicks(60);
+
 		// Lookalikes: "farm" and "thank you" do nothing.
 		int fartsBefore = context.computeOnClient(client -> FartEffects.startedCount());
 		int fingersBefore = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
-		for (String clip : List.of("farm_sentence.wav", "thank_you_sentence.wav")) {
+		for (String clip : List.of("farm_sentence.wav", "thank_you_sentence.wav", "back_off_sentence.wav")) {
 			AudioPlayer other = say(world, api, clips.resolve(clip));
 			context.waitFor(client -> !other.isPlaying(), TIMEOUT_TICKS);
 			context.waitTicks(40); // time for the last words to be recognized
 		}
 		check(context.computeOnClient(client -> FartEffects.startedCount()) == fartsBefore, "a sentence with \"farm\" in it didn't cause a fart");
-		check(context.computeOnClient(client -> MiddleFingerEmote.startedCount()) == fingersBefore, "\"thank you\" didn't cause a middle finger");
+		check(context.computeOnClient(client -> MiddleFingerEmote.startedCount()) == fingersBefore, "\"thank you\" and \"back off\" didn't cause a middle finger");
 	}
 
 	/** Plays a 48 kHz mono WAV file through a voice chat channel attached to our own player. */

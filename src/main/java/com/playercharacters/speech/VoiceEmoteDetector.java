@@ -7,7 +7,6 @@ import com.playercharacters.PlayerCharactersClient;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.effects.FartEffects;
 import com.playercharacters.effects.MiddleFingerEmote;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -21,20 +20,31 @@ import org.vosk.Model;
 import org.vosk.Recognizer;
 
 /**
- * Listens for "fart" and "fuck you" in voice chat: in the voices of everyone you can hear, and in your own microphone.
+ * Listens for "fart", "fuck you" and "fuck off" in voice chat: in the voices of everyone you can hear, and in your own
+ * microphone.
  * <p>
- * Uses Vosk offline speech recognition on its own thread, so voice chat is never slowed down. The recognizer only
- * knows a handful of words: the two phrases, and words that sound like them ("far", "part", "thank you", "luck"...),
- * so that near misses are heard as those words instead. Nothing is sent anywhere; it all happens on this computer.
+ * Uses Vosk offline speech recognition on its own thread, so voice chat is never slowed down. Each recognizer only
+ * knows a handful of words: the phrases, and words that sound like them ("far", "part", "thank you", "luck", "cough"...),
+ * so that near misses are heard as those words instead. There is one recognizer for farts and one for the middle
+ * finger, because adding "fuck off" to the fart recognizer made it miss more farts. Nothing is sent anywhere; it all
+ * happens on this computer.
  * <p>
- * Tested with 168 computer-voiced sentences in six accents: "fart" in 32 of 36, "fuck you" in 36 of 36, and one false
- * "fart" in the 168 sentences, which include lookalikes such as "farm", "heart", "thank you" and "what the fuck".
+ * Tested with 372 computer-voiced sentences in six accents: "fart" was caught in 32 of 36, "fuck you" and "fuck off" in
+ * 72 of 72. The other sentences, which include lookalikes such as "farm", "heart", "thank you", "back off",
+ * "what the fuck" and "oh fuck, I died", started one fart (of 336) and no middle finger (of 300).
  */
 public final class VoiceEmoteDetector {
-	/** The phrases, and similar-sounding words that catch near misses. "[unk]" stands for any other word. */
-	private static final String GRAMMAR = "[\"fart\", \"far\", \"part\", \"start\", \"heart\", \"art\", \"farm\", \"fast\", \"car\", \"dart\", "
-		+ "\"fuck you\", \"fuck\", \"you\", \"thank you\", \"for you\", \"to you\", \"luck\", \"duck\", \"stuck\", \"truck\", \"back\", "
-		+ "\"look\", \"book\", \"hook\", \"fun\", \"fork\", \"folk\", \"[unk]\"]";
+	private static final String FART_WORDS = "\"fart\", \"far\", \"part\", \"start\", \"heart\", \"art\", \"farm\", \"fast\", \"car\", \"dart\"";
+	private static final String FUCK_YOU_WORDS = "\"fuck you\", \"fuck\", \"you\", \"thank you\", \"for you\", \"to you\", \"luck\", \"duck\", "
+		+ "\"stuck\", \"truck\", \"back\", \"look\", \"book\", \"hook\", \"fun\", \"fork\", \"folk\"";
+	private static final String FUCK_OFF_WORDS = "\"fuck off\", \"off\", \"cough\", \"back off\", \"show off\", \"took off\", \"fall off\", "
+		+ "\"kick off\", \"fork off\", \"i\", \"died\"";
+	/** For farts: the phrases and similar-sounding words that catch near misses. "[unk]" stands for any other word. */
+	private static final String FART_GRAMMAR = "[" + FART_WORDS + ", " + FUCK_YOU_WORDS + ", \"[unk]\"]";
+	/** For the middle finger: the same, plus "fuck off" and its lookalikes. */
+	private static final String MIDDLE_FINGER_GRAMMAR = "[" + FART_WORDS + ", " + FUCK_YOU_WORDS + ", " + FUCK_OFF_WORDS + ", \"[unk]\"]";
+	private static final int FART = 0;
+	private static final int MIDDLE_FINGER = 1;
 	private static final int SAMPLE_RATE = 16_000;
 	/** Audio goes to the recognizer in 100 ms pieces. */
 	private static final int CHUNK = SAMPLE_RATE / 10;
@@ -137,7 +147,7 @@ public final class VoiceEmoteDetector {
 					}
 					try {
 						listener = new Listener(audio.speaker(), model);
-					} catch (IOException e) {
+					} catch (RuntimeException e) {
 						PlayerCharactersClient.LOGGER.warn("Couldn't start listening to {}", audio.speaker(), e);
 						return;
 					}
@@ -182,15 +192,15 @@ public final class VoiceEmoteDetector {
 		return settings.fartDetection() || settings.middleFinger();
 	}
 
-	/** How often each emote's phrase is in a recognized text: {farts, middle fingers}. */
+	/** How often each emote's phrase is in a recognized text: {farts, middle fingers ("fuck you" or "fuck off")}. */
 	static int[] count(String text) {
 		String[] words = text.strip().split("\\s+");
 		int[] counts = new int[2];
 		for (int i = 0; i < words.length; i++) {
 			if (words[i].equals("fart")) {
-				counts[0]++;
-			} else if (words[i].equals("fuck") && i + 1 < words.length && words[i + 1].equals("you")) {
-				counts[1]++;
+				counts[FART]++;
+			} else if (words[i].equals("fuck") && i + 1 < words.length && (words[i + 1].equals("you") || words[i + 1].equals("off"))) {
+				counts[MIDDLE_FINGER]++;
 			}
 		}
 		return counts;
@@ -208,9 +218,9 @@ public final class VoiceEmoteDetector {
 	}
 
 	private static void heard(UUID speaker, int emote) {
-		PlayerCharactersClient.LOGGER.debug("Heard {} from {}", emote == 0 ? "\"fart\"" : "\"fuck you\"", speaker);
+		PlayerCharactersClient.LOGGER.debug("Heard {} from {}", emote == FART ? "\"fart\"" : "\"fuck you\" or \"fuck off\"", speaker);
 		Minecraft.getInstance().execute(() -> {
-			if (emote == 0) {
+			if (emote == FART) {
 				FartEffects.start(speaker);
 			} else {
 				MiddleFingerEmote.start(speaker);
@@ -218,22 +228,31 @@ public final class VoiceEmoteDetector {
 		});
 	}
 
-	/** Speech recognition for one person. */
+	private static boolean isOn(int emote) {
+		CharacterSettings settings = CharacterSettings.get();
+		return emote == FART ? settings.fartDetection() : settings.middleFinger();
+	}
+
+	/** Speech recognition for one person: a recognizer for each emote, fed the same audio. */
 	private static final class Listener {
 		private final UUID speaker;
-		private final Recognizer recognizer;
+		private final Spotter[] spotters;
 		private final Downsampler downsampler = new Downsampler();
 		private final short[] chunk = new short[CHUNK];
 		private final short[] frame = new short[1024];
 		private int chunkLength;
-		/** How many times each phrase was already acted on in the sentence being spoken. */
-		private final int[] handled = new int[2];
 		private boolean talking;
 		long lastAudioNanos;
 
-		Listener(UUID speaker, Model model) throws IOException {
+		Listener(UUID speaker, Model model) {
 			this.speaker = speaker;
-			this.recognizer = new Recognizer(model, SAMPLE_RATE, GRAMMAR);
+			Spotter fart = new Spotter(FART, new Recognizer(model, SAMPLE_RATE, FART_GRAMMAR));
+			try {
+				this.spotters = new Spotter[] {fart, new Spotter(MIDDLE_FINGER, new Recognizer(model, SAMPLE_RATE, MIDDLE_FINGER_GRAMMAR))};
+			} catch (RuntimeException e) {
+				fart.recognizer.close();
+				throw e;
+			}
 		}
 
 		void accept(short[] pcm, long now) {
@@ -252,14 +271,12 @@ public final class VoiceEmoteDetector {
 		}
 
 		private void feed() {
-			boolean sentenceEnded = this.recognizer.acceptWaveForm(this.chunk, this.chunkLength);
-			this.chunkLength = 0;
-			if (sentenceEnded) {
-				this.check(text(this.recognizer.getResult(), "text"), true);
-			} else {
-				// The guess so far. Acting on it makes the fart come right after the word, not after the sentence.
-				this.check(text(this.recognizer.getPartialResult(), "partial"), false);
+			for (Spotter spotter : this.spotters) {
+				if (isOn(spotter.emote)) {
+					spotter.feed(this.speaker, this.chunk, this.chunkLength);
+				}
 			}
+			this.chunkLength = 0;
 		}
 
 		/** They stopped talking: get the final result for what they said last. */
@@ -271,24 +288,52 @@ public final class VoiceEmoteDetector {
 			if (this.chunkLength > 0) {
 				this.feed();
 			}
-			this.check(text(this.recognizer.getFinalResult(), "text"), true);
-		}
-
-		private void check(String text, boolean sentenceEnded) {
-			int[] counts = count(text);
-			for (int emote = 0; emote < counts.length; emote++) {
-				if (counts[emote] > this.handled[emote]) {
-					heard(this.speaker, emote);
-					this.handled[emote] = counts[emote];
-				}
-				if (sentenceEnded) {
-					this.handled[emote] = 0;
-				}
+			for (Spotter spotter : this.spotters) {
+				spotter.finish(this.speaker);
 			}
 		}
 
 		void close() {
-			this.recognizer.close();
+			for (Spotter spotter : this.spotters) {
+				spotter.recognizer.close();
+			}
+		}
+	}
+
+	/** One recognizer, listening for one emote's phrase. */
+	private static final class Spotter {
+		final int emote;
+		final Recognizer recognizer;
+		/** How many times the phrase was already acted on in the sentence being spoken. */
+		private int handled;
+
+		Spotter(int emote, Recognizer recognizer) {
+			this.emote = emote;
+			this.recognizer = recognizer;
+		}
+
+		void feed(UUID speaker, short[] chunk, int length) {
+			if (this.recognizer.acceptWaveForm(chunk, length)) {
+				this.check(speaker, text(this.recognizer.getResult(), "text"), true);
+			} else {
+				// The guess so far. Acting on it makes the emote come right after the words, not after the sentence.
+				this.check(speaker, text(this.recognizer.getPartialResult(), "partial"), false);
+			}
+		}
+
+		void finish(UUID speaker) {
+			this.check(speaker, text(this.recognizer.getFinalResult(), "text"), true);
+		}
+
+		private void check(UUID speaker, String text, boolean sentenceEnded) {
+			int count = count(text)[this.emote];
+			if (count > this.handled) {
+				heard(speaker, this.emote);
+				this.handled = count;
+			}
+			if (sentenceEnded) {
+				this.handled = 0;
+			}
 		}
 	}
 
