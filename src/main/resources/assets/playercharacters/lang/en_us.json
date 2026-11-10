@@ -1,0 +1,46 @@
+{
+	"key.category.playercharacters.main": "Player Characters",
+	"key.playercharacters.open_menu": "Open character menu",
+	"key.playercharacters.toggle_mouths": "Toggle talking mouths",
+
+	"playercharacters.message.mouths_on": "Talking mouths: ON",
+	"playercharacters.message.mouths_off": "Talking mouths: OFF",
+
+	"playercharacters.menu.title": "Player Characters",
+	"playercharacters.menu.search": "Search players...",
+	"playercharacters.menu.you": "(you)",
+	"playercharacters.menu.default": "Default: %s",
+	"playercharacters.menu.default.tooltip": "What every player looks like unless you pick something else for them.",
+	"playercharacters.menu.talking_mouths": "Talking mouths",
+	"playercharacters.menu.talking_mouths.tooltip": "Open the character's mouth while that player talks in voice chat.",
+	"playercharacters.menu.open_folder": "Characters folder",
+	"playercharacters.menu.open_folder.tooltip": "Put skin PNG files in this folder, then click Reload.",
+	"playercharacters.menu.reload": "Reload",
+
+	"playercharacters.status.loaded": "%s characters loaded",
+	"playercharacters.status.loaded_one": "1 character loaded",
+	"playercharacters.status.none": "No characters yet: add skins to the characters folder",
+	"playercharacters.status.problems": "%s file(s) skipped",
+	"playercharacters.status.no_voice_chat": "Simple Voice Chat not found",
+	"playercharacters.status.no_voice_chat.tooltip": "Install Simple Voice Chat to make mouths move when players talk.",
+
+	"playercharacters.choice.default": "Default: %s",
+	"playercharacters.choice.own": "Own skin",
+	"playercharacters.choice.own_lower": "own skin",
+	"playercharacters.choice.random": "Random",
+	"playercharacters.choice.random_is": "Random: %s",
+	"playercharacters.choice.missing": "Missing: %s",
+
+	"playercharacters.picker.title.player": "Character for %s",
+	"playercharacters.picker.title.default": "Default for all players",
+	"playercharacters.picker.choose": "Choose",
+	"playercharacters.picker.default": "Default",
+	"playercharacters.picker.default.desc": "Follow the default (%s)",
+	"playercharacters.picker.own.desc": "Their normal Minecraft skin",
+	"playercharacters.picker.own.desc_all": "Players keep their normal skins",
+	"playercharacters.picker.random.desc": "Picked for them: %s",
+	"playercharacters.picker.random.desc_all": "Each player gets one of your characters",
+	"playercharacters.picker.random.empty": "No characters loaded yet",
+	"playercharacters.picker.mouth.custom": "Custom talking face",
+	"playercharacters.picker.mouth.auto": "Automatic talking mouth"
+}

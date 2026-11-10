@@ -1,0 +1,29 @@
+{
+	"schemaVersion": 1,
+	"id": "playercharacters",
+	"version": "${version}",
+	"name": "Player Characters",
+	"description": "Shows players on a server as characters you make yourself. Their mouths move when they talk in Simple Voice Chat. Press K to choose who is which character.",
+	"icon": "assets/playercharacters/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.playercharacters.PlayerCharactersClient"
+		],
+		"voicechat": [
+			"com.playercharacters.voice.VoiceChatPlugin"
+		]
+	},
+	"mixins": [
+		"playercharacters.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"recommends": {
+		"voicechat": "*"
+	}
+}
