@@ -61,7 +61,8 @@ public final class CharacterModelRenderer {
 	private static void submitPart(CharacterModel model, Bone bone, ModelPart follows, CharacterModel.@Nullable Part jawParent, float jawAngle,
 		PoseStack poseStack, SubmitNodeCollector collector, RenderType type, int light, int overlay, int tint) {
 		CharacterModel.Part part = model.part(bone);
-		if (part == null || !follows.visible) {
+		// Parts without polygons only provide a joint (like the burger's head joint, which its bun turns with).
+		if (part == null || part.vertexCount() == 0 || !follows.visible) {
 			return;
 		}
 		poseStack.pushPose();

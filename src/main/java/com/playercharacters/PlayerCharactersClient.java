@@ -4,11 +4,14 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
 import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.config.CharacterSettings;
+import com.playercharacters.effects.FartEffects;
 import com.playercharacters.gui.CharacterMenuScreen;
+import java.util.regex.Pattern;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -20,6 +23,9 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 	public static final Logger LOGGER = LogUtils.getLogger();
 
 	private static final KeyMapping.Category KEY_CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
+	/** "fart" as a word of its own in a chat message (also "farts", "farted" and "farting"). */
+	private static final Pattern FART_IN_CHAT = Pattern.compile("(?<![\\p{L}\\p{N}_])fart(s|ed|ing)?(?![\\p{L}\\p{N}_])",
+		Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
 	private static KeyMapping openMenuKey;
 	private static KeyMapping toggleMouthsKey;
@@ -37,6 +43,16 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		// Textures can only be created once the game window exists.
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> CharacterLibrary.reload());
 		ClientTickEvents.END_CLIENT_TICK.register(PlayerCharactersClient::onEndTick);
+
+		// Saying "fart" in voice chat is handled by FartDetector. Typing it in chat works too.
+		ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
+			if (sender != null) {
+				String text = signedMessage != null ? signedMessage.signedContent() : message.getString();
+				if (FART_IN_CHAT.matcher(text).find()) {
+					FartEffects.start(sender.id());
+				}
+			}
+		});
 	}
 
 	private static void onEndTick(Minecraft client) {
@@ -56,5 +72,7 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 					enabled ? "playercharacters.message.mouths_on" : "playercharacters.message.mouths_off"), true);
 			}
 		}
+
+		FartEffects.tick(client);
 	}
 }

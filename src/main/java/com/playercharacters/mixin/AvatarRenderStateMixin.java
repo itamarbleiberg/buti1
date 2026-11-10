@@ -7,13 +7,15 @@ import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-/** Lets each player's render state remember which character it is drawn as, and how open its jaw is. */
+/** Lets each player's render state remember which character it is drawn as, how open its jaw is and how far it bends over. */
 @Mixin(AvatarRenderState.class)
 public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	@Unique
 	private @Nullable PlayerCharacter playercharacters$character;
 	@Unique
 	private float playercharacters$jaw;
+	@Unique
+	private float playercharacters$fart;
 
 	@Override
 	public @Nullable PlayerCharacter playercharacters$character() {
@@ -33,5 +35,15 @@ public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	@Override
 	public void playercharacters$setJaw(float jaw) {
 		this.playercharacters$jaw = jaw;
+	}
+
+	@Override
+	public float playercharacters$fart() {
+		return this.playercharacters$fart;
+	}
+
+	@Override
+	public void playercharacters$setFart(float fart) {
+		this.playercharacters$fart = fart;
 	}
 }

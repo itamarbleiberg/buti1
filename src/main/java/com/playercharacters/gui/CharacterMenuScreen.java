@@ -4,6 +4,7 @@ import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
+import com.playercharacters.speech.SpeechModel;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -89,13 +90,17 @@ public final class CharacterMenuScreen extends Screen {
 
 		LinearLayout settingsRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		this.defaultButton = settingsRow.addChild(Button.builder(ChoiceText.forDefault(), button -> this.openDefaultPicker())
-			.width(170)
+			.width(150)
 			.tooltip(Tooltip.create(Component.translatable("playercharacters.menu.default.tooltip")))
 			.build());
 		settingsRow.addChild(CycleButton.onOffBuilder(this.settings.talkingMouths())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.talking_mouths.tooltip")))
-			.create(0, 0, 140, 20, Component.translatable("playercharacters.menu.talking_mouths"),
+			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.talking_mouths"),
 				(button, value) -> this.settings.setTalkingMouths(value)));
+		settingsRow.addChild(CycleButton.onOffBuilder(this.settings.fartDetection())
+			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.farts.tooltip")))
+			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.farts"),
+				(button, value) -> this.settings.setFartDetection(value)));
 
 		LinearLayout buttonRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.open_folder"),
@@ -170,6 +175,9 @@ public final class CharacterMenuScreen extends Screen {
 		if (!VOICE_CHAT_INSTALLED) {
 			text.append(Component.literal("  "))
 				.append(Component.translatable("playercharacters.status.no_voice_chat").withStyle(ChatFormatting.RED));
+		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && this.settings.fartDetection()) {
+			text.append(Component.literal("  "))
+				.append(Component.translatable("playercharacters.status.no_speech").withStyle(ChatFormatting.RED));
 		}
 		return text;
 	}
@@ -178,6 +186,8 @@ public final class CharacterMenuScreen extends Screen {
 		List<String> lines = new ArrayList<>(CharacterLibrary.problems());
 		if (!VOICE_CHAT_INSTALLED) {
 			lines.add(Component.translatable("playercharacters.status.no_voice_chat.tooltip").getString());
+		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && this.settings.fartDetection()) {
+			lines.add(Component.translatable("playercharacters.status.no_speech.tooltip", String.valueOf(SpeechModel.problem())).getString());
 		}
 		return lines.isEmpty() ? null : Tooltip.create(Component.literal(String.join("\n", lines)));
 	}

@@ -6,7 +6,8 @@
 		"AbstractClientPlayerMixin",
 		"AvatarRendererMixin",
 		"AvatarRenderStateMixin",
-		"LivingEntityRendererMixin"
+		"LivingEntityRendererMixin",
+		"PlayerModelMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

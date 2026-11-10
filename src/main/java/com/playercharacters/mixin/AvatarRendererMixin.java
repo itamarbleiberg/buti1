@@ -2,6 +2,7 @@ package com.playercharacters.mixin;
 
 import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.PlayerCharacter;
+import com.playercharacters.effects.FartEffects;
 import com.playercharacters.render.CharacterRenderState;
 import com.playercharacters.render.JawAnimator;
 import java.util.UUID;
@@ -14,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Each frame, records on the player's render state which character to draw and how far its jaw is open. */
+/** Each frame, records on the player's render state which character to draw, how far its jaw is open and how far it bends over. */
 @Mixin(AvatarRenderer.class)
 public abstract class AvatarRendererMixin {
 	@Inject(
@@ -28,9 +29,11 @@ public abstract class AvatarRendererMixin {
 			PlayerCharacter character = CharacterResolver.characterFor(id);
 			characterState.playercharacters$setCharacter(character);
 			characterState.playercharacters$setJaw(character != null && character.isModel() ? JawAnimator.jawFor(id) : 0.0F);
+			characterState.playercharacters$setFart(FartEffects.bend(id, partialTick));
 		} else {
 			characterState.playercharacters$setCharacter(null);
 			characterState.playercharacters$setJaw(0.0F);
+			characterState.playercharacters$setFart(0.0F);
 		}
 	}
 }

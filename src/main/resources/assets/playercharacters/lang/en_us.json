@@ -13,8 +13,10 @@
 	"playercharacters.menu.default.tooltip": "What every player looks like unless you pick something else for them.",
 	"playercharacters.menu.talking_mouths": "Talking mouths",
 	"playercharacters.menu.talking_mouths.tooltip": "Open the character's mouth while that player talks in voice chat.",
+	"playercharacters.menu.farts": "Farts",
+	"playercharacters.menu.farts.tooltip": "When a player says \"fart\" in voice chat (or types it in chat), they bend over and fart. The speech recognition runs on your computer: no audio is sent anywhere.",
 	"playercharacters.menu.open_folder": "Characters folder",
-	"playercharacters.menu.open_folder.tooltip": "Put skin PNG files in this folder, then click Reload.",
+	"playercharacters.menu.open_folder.tooltip": "Put 3D model folders or skin PNG files in this folder, then click Reload.",
 	"playercharacters.menu.reload": "Reload",
 
 	"playercharacters.status.loaded": "%s characters loaded",
@@ -23,6 +25,8 @@
 	"playercharacters.status.problems": "%s file(s) skipped",
 	"playercharacters.status.no_voice_chat": "Simple Voice Chat not found",
 	"playercharacters.status.no_voice_chat.tooltip": "Install Simple Voice Chat to make mouths move when players talk.",
+	"playercharacters.status.no_speech": "Fart detection unavailable",
+	"playercharacters.status.no_speech.tooltip": "Speech recognition couldn't start on this computer, so saying \"fart\" does nothing (typing it in chat still works). Reason: %s",
 
 	"playercharacters.choice.default": "Default: %s",
 	"playercharacters.choice.own": "Own skin",
@@ -41,7 +45,9 @@
 	"playercharacters.picker.random.desc": "Picked for them: %s",
 	"playercharacters.picker.random.desc_all": "Each player gets one of your characters",
 	"playercharacters.picker.random.empty": "No characters loaded yet",
-	"playercharacters.picker.model": "3D model with a moving jaw",
+	"playercharacters.picker.model": "3D model with a moving mouth",
 	"playercharacters.picker.mouth.custom": "Custom talking face",
-	"playercharacters.picker.mouth.auto": "Automatic talking mouth"
+	"playercharacters.picker.mouth.auto": "Automatic talking mouth",
+
+	"subtitles.playercharacters.fart": "Player farts"
 }

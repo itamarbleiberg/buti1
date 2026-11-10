@@ -1,0 +1,10 @@
+{
+	"fart": {
+		"sounds": [
+			"playercharacters:fart1",
+			"playercharacters:fart2",
+			"playercharacters:fart3"
+		],
+		"subtitle": "subtitles.playercharacters.fart"
+	}
+}

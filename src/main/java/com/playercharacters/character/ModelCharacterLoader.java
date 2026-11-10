@@ -27,7 +27,7 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code model.obj} - the model (required). Objects/groups are matched to body parts by name:
  *       head, jaw, body, right_arm, left_arm, right_leg, left_leg. Anything else moves with the body.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
- *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle and pivots.</li>
+ *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt and pivots.</li>
  *   <li>{@code icon.png} - optional picture for the menus.</li>
  * </ul>
  * Models are expected in Blender's usual export orientation: Y up, facing +Z, 1 unit = 1 block.
@@ -53,6 +53,7 @@ final class ModelCharacterLoader {
 		@Nullable Float height;
 		@Nullable Float turn;
 		@Nullable Float jaw_angle;
+		float @Nullable [] butt;
 		@Nullable Map<String, PartOptions> parts;
 	}
 
@@ -166,11 +167,59 @@ final class ModelCharacterLoader {
 		Map<CharacterModel.Bone, CharacterModel.Part> parts = new EnumMap<>(CharacterModel.Bone.class);
 		for (Map.Entry<CharacterModel.Bone, List<Obj.Face>> entry : facesByBone.entrySet()) {
 			CharacterModel.Bone bone = entry.getKey();
-			PartOptions partOptions = options.parts == null ? null : options.parts.get(bone.name().toLowerCase(Locale.ROOT));
-			parts.put(bone, buildPart(obj, entry.getValue(), bone, partOptions, t));
+			parts.put(bone, buildPart(obj, entry.getValue(), bone, partOptions(options, bone), t));
 		}
-		float jawDegrees = options.jaw_angle == null ? 30.0F : Math.max(0, Math.min(80, options.jaw_angle));
-		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees));
+		// A joint without polygons, for example a head joint for a jaw that is the whole head (like the burger's bun).
+		for (CharacterModel.Bone bone : CharacterModel.Bone.values()) {
+			PartOptions partOptions = partOptions(options, bone);
+			if (!parts.containsKey(bone) && partOptions != null && partOptions.pivot != null && partOptions.pivot.length == 3) {
+				float[] pivot = partOptions.pivot;
+				parts.put(bone, new CharacterModel.Part(new float[0], new int[0], t.point(pivot[0], pivot[1], pivot[2]), null));
+			}
+		}
+
+		// Positive angles open the jaw downward, negative ones open it upward like a lid.
+		float jawDegrees = options.jaw_angle == null ? 30.0F : Math.max(-80, Math.min(80, options.jaw_angle));
+		Vector3f hip = hip(parts, t.scale * height);
+		Vector3f butt;
+		if (options.butt != null && options.butt.length == 3) {
+			butt = t.bodySpace(t.point(options.butt[0], options.butt[1], options.butt[2]));
+		} else {
+			butt = t.bodySpace(defaultButt(parts, hip));
+		}
+		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt);
+	}
+
+	private static @Nullable PartOptions partOptions(Options options, CharacterModel.Bone bone) {
+		return options.parts == null ? null : options.parts.get(bone.name().toLowerCase(Locale.ROOT));
+	}
+
+	/** Model space: where the legs meet the body, which is what the upper body bends around. */
+	private static Vector3f hip(Map<CharacterModel.Bone, CharacterModel.Part> parts, float modelHeight) {
+		CharacterModel.Part right = parts.get(CharacterModel.Bone.RIGHT_LEG);
+		CharacterModel.Part left = parts.get(CharacterModel.Bone.LEFT_LEG);
+		if (right != null && left != null) {
+			return new Vector3f(right.pivot()).add(left.pivot()).mul(0.5F);
+		}
+		if (right != null || left != null) {
+			Vector3f leg = new Vector3f((right != null ? right : left).pivot());
+			return leg.set(0.0F, leg.y, leg.z);
+		}
+		return new Vector3f(0.0F, FEET_Y - modelHeight * 0.42F, 0.0F);
+	}
+
+	/** Model space: the middle of the body's back, a little above the hips. */
+	private static Vector3f defaultButt(Map<CharacterModel.Bone, CharacterModel.Part> parts, Vector3f hip) {
+		CharacterModel.Part body = parts.get(CharacterModel.Bone.BODY);
+		Iterable<CharacterModel.Part> search = body != null && body.vertexCount() > 0 ? List.of(body) : parts.values();
+		float back = hip.z;
+		for (CharacterModel.Part part : search) {
+			float[] v = part.vertices();
+			for (int o = 0; o < v.length; o += 8) {
+				back = Math.max(back, v[o + 2]); // the model faces -Z, so the back is the largest z
+			}
+		}
+		return new Vector3f(hip.x, hip.y - 0.05F, back + 0.02F);
 	}
 
 	private static CharacterModel.Part buildPart(Obj obj, List<Obj.Face> faces, CharacterModel.Bone bone, @Nullable PartOptions options, Transform t) {
@@ -306,6 +355,14 @@ final class ModelCharacterLoader {
 		/** For points that are already turned. */
 		Vector3f turnedPoint(float[] p) {
 			return new Vector3f(p[0] * this.scale, FEET_Y - (p[1] - this.minY) * this.scale, -p[2] * this.scale);
+		}
+
+		/**
+		 * From model space to blocks relative to the feet as the player renderer draws it (after its 15/16 scale):
+		 * x toward the character's left, y up, z forward.
+		 */
+		Vector3f bodySpace(Vector3f model) {
+			return new Vector3f(model.x * PLAYER_SCALE, (FEET_Y - model.y) * PLAYER_SCALE, -model.z * PLAYER_SCALE);
 		}
 
 		Vector3f direction(float x, float y, float z) {

@@ -14,4 +14,9 @@ public interface CharacterRenderState {
 	float playercharacters$jaw();
 
 	void playercharacters$setJaw(float jaw);
+
+	/** How far the player is bent over while farting, from 0 (standing up straight) to about 1. */
+	float playercharacters$fart();
+
+	void playercharacters$setFart(float fart);
 }

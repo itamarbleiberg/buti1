@@ -4,6 +4,7 @@ import java.util.EnumMap;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -24,7 +25,8 @@ public final class CharacterModel {
 	}
 
 	/**
-	 * One rigid piece of the model.
+	 * One rigid piece of the model. A part can have no vertices at all: then it only provides a joint
+	 * (for example a head joint that the jaw turns around).
 	 *
 	 * @param vertices 8 floats per vertex (x, y, z, normal x, y, z, u, v), 4 vertices per quad
 	 * @param colors   one ARGB color per vertex
@@ -40,11 +42,21 @@ public final class CharacterModel {
 	private final Map<Bone, Part> parts;
 	private final Identifier texture;
 	private final float jawOpenRadians;
+	private final Vector3f hip;
+	private final Vector3f butt;
 
-	public CharacterModel(Map<Bone, Part> parts, Identifier texture, float jawOpenRadians) {
+	/**
+	 * @param jawOpenRadians how far the jaw turns when fully open; negative opens it upward (like a lid)
+	 * @param hip            model space: the point the upper body bends around
+	 * @param butt           where fart clouds come out, in blocks relative to the feet: x toward the character's
+	 *                       left, y up, z forward. Already at the character's real size.
+	 */
+	public CharacterModel(Map<Bone, Part> parts, Identifier texture, float jawOpenRadians, Vector3f hip, Vector3f butt) {
 		this.parts = new EnumMap<>(parts);
 		this.texture = texture;
 		this.jawOpenRadians = jawOpenRadians;
+		this.hip = hip;
+		this.butt = butt;
 	}
 
 	public @Nullable Part part(Bone bone) {
@@ -57,6 +69,14 @@ public final class CharacterModel {
 
 	public float jawOpenRadians() {
 		return this.jawOpenRadians;
+	}
+
+	public Vector3fc hip() {
+		return this.hip;
+	}
+
+	public Vector3fc butt() {
+		return this.butt;
 	}
 
 	public int quadCount() {

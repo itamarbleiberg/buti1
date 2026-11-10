@@ -3,14 +3,18 @@ package com.playercharacters.character;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.playercharacters.PlayerCharactersClient;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,11 +48,34 @@ public final class CharacterLibrary {
 	/** Lists the examples that were already put in the folder once, so deleted ones don't come back. */
 	private static final String EXAMPLES_MARKER = ".examples";
 	private static final Map<String, List<String>> EXAMPLES = new LinkedHashMap<>();
+	/**
+	 * Files of older examples that a newer example takes the place of, with their SHA-256. They are deleted when the
+	 * newer example is installed, but only if none of them were changed.
+	 */
+	private static final Map<String, Map<String, String>> REPLACES = new HashMap<>();
+	/** SHA-256 of older versions of example files. Such files are updated, as long as nobody changed them. */
+	private static final Map<String, Set<String>> OUTDATED = new HashMap<>();
 
 	static {
-		EXAMPLES.put("Robot", List.of("Robot.png", "Robot_talking.png"));
-		EXAMPLES.put("Frog", List.of("Frog.png", "Frog.json"));
-		EXAMPLES.put("Alien", List.of("Alien/model.obj", "Alien/character.json", "Alien/icon.png"));
+		EXAMPLES.put("Alien", modelFiles("Alien"));
+		EXAMPLES.put("Robot 3D", modelFiles("Robot"));
+		EXAMPLES.put("Frog 3D", modelFiles("Frog"));
+		EXAMPLES.put("Burger", modelFiles("Burger"));
+		// Versions 1 and 2 had the robot and the frog as skins.
+		REPLACES.put("Robot 3D", Map.of(
+			"Robot.png", "c25c1b4982abf476bbd50ea787b432fda2d01fe0ee381a091ca265e12408e539",
+			"Robot_talking.png", "d1d27376e6217477ab439feb77c356e1a3e8db9180fcc865bbef9a684e71dab4"));
+		REPLACES.put("Frog 3D", Map.of(
+			"Frog.png", "1c35f4608a6d53a3543d3697ea4e2ccb06341bca0cfbeaf2aa3db4fec9ef8979",
+			"Frog.json", "8bb9b34a81b6e0ef6d0c99684c19e28f3f67d67069bed01c0f1d93bbcc3aaa35"));
+		// The alien of version 2.
+		OUTDATED.put("Alien/model.obj", Set.of("766b2cf98270f83448615a0797d88517bb7c3f8da8b60b8b8598e9a06fad711d"));
+		OUTDATED.put("Alien/character.json", Set.of("3fea26c095af1f961822a9452acd2629e6a15f8901574d41e680f38d099fe879"));
+		OUTDATED.put("Alien/icon.png", Set.of("e32bbc58b8f7ec558d785b703e144add66e85e3f26ebda6fe8b7fc39a79bff6b"));
+	}
+
+	private static List<String> modelFiles(String folder) {
+		return List.of(folder + "/model.obj", folder + "/character.json", folder + "/icon.png");
 	}
 
 	private static volatile List<PlayerCharacter> characters = List.of();
@@ -186,6 +213,8 @@ public final class CharacterLibrary {
 			.toList();
 		Set<String> names = new HashSet<>();
 		pngs.forEach(path -> names.add(baseName(path)));
+		Set<String> modelFolders = new HashSet<>();
+		all.stream().filter(ModelCharacterLoader::isModelFolder).forEach(path -> modelFolders.add(path.getFileName().toString()));
 
 		List<Path> result = new ArrayList<>();
 		for (Path path : all) {
@@ -198,7 +227,13 @@ public final class CharacterLibrary {
 			} else if (pngs.contains(path)) {
 				String name = baseName(path);
 				boolean talkingFrame = name.endsWith(TALKING_SUFFIX) && names.contains(name.substring(0, name.length() - TALKING_SUFFIX.length()));
-				if (!talkingFrame) {
+				if (talkingFrame) {
+					continue;
+				}
+				if (modelFolders.contains(name)) {
+					// Both would be called the same, and choices are saved by name. The 3D one wins.
+					issues.add(path.getFileName() + ": skipped because the 3D character folder \"" + name + "\" has the same name. Rename one of them.");
+				} else {
 					result.add(path);
 				}
 			}
@@ -235,16 +270,26 @@ public final class CharacterLibrary {
 			if (mod.isEmpty()) {
 				return;
 			}
-			boolean addedAny = false;
+			boolean changed = false;
 			for (Map.Entry<String, List<String>> example : EXAMPLES.entrySet()) {
 				if (installed.add(example.getKey())) {
+					deleteIfUnchanged(REPLACES.getOrDefault(example.getKey(), Map.of()));
 					for (String file : example.getValue()) {
-						copyExample(mod.get(), file);
+						copyExample(mod.get(), file, false);
 					}
-					addedAny = true;
+					changed = true;
+				} else {
+					// Installed by an older version of the mod: bring it up to date, unless it was changed.
+					for (String file : example.getValue()) {
+						Set<String> oldVersions = OUTDATED.get(file);
+						if (oldVersions != null && oldVersions.contains(sha256(FOLDER.resolve(file)))) {
+							copyExample(mod.get(), file, true);
+							changed = true;
+						}
+					}
 				}
 			}
-			if (addedAny) {
+			if (changed) {
 				Optional<Path> readme = mod.get().findPath("assets/" + PlayerCharactersClient.MOD_ID + "/examples/README.txt");
 				if (readme.isPresent()) {
 					Files.copy(readme.get(), FOLDER.resolve("README.txt"), StandardCopyOption.REPLACE_EXISTING);
@@ -256,12 +301,45 @@ public final class CharacterLibrary {
 		}
 	}
 
-	private static void copyExample(ModContainer mod, String file) throws IOException {
+	private static void copyExample(ModContainer mod, String file, boolean replace) throws IOException {
 		Optional<Path> source = mod.findPath("assets/" + PlayerCharactersClient.MOD_ID + "/examples/" + file);
 		Path target = FOLDER.resolve(file);
-		if (source.isPresent() && !Files.exists(target)) {
+		if (source.isPresent() && (replace || !Files.exists(target))) {
 			Files.createDirectories(target.getParent());
-			Files.copy(source.get(), target);
+			Files.copy(source.get(), target, StandardCopyOption.REPLACE_EXISTING);
+		}
+	}
+
+	/** Deletes these files (name to SHA-256), but only if every one that exists is exactly as the mod put it there. */
+	private static void deleteIfUnchanged(Map<String, String> files) throws IOException {
+		for (Map.Entry<String, String> file : files.entrySet()) {
+			Path path = FOLDER.resolve(file.getKey());
+			if (Files.exists(path) && !file.getValue().equals(sha256(path))) {
+				PlayerCharactersClient.LOGGER.info("Keeping the old example {} because it was changed", file.getKey());
+				return;
+			}
+		}
+		for (String file : files.keySet()) {
+			if (Files.deleteIfExists(FOLDER.resolve(file))) {
+				PlayerCharactersClient.LOGGER.info("Removed the old example {}, it is now a 3D character", file);
+			}
+		}
+	}
+
+	/** SHA-256 of a file as lowercase hex, or null if it doesn't exist or can't be read. */
+	private static @Nullable String sha256(Path file) {
+		if (!Files.isRegularFile(file)) {
+			return null;
+		}
+		try (InputStream in = Files.newInputStream(file)) {
+			MessageDigest digest = MessageDigest.getInstance("SHA-256");
+			byte[] buffer = new byte[65536];
+			for (int n; (n = in.read(buffer)) > 0; ) {
+				digest.update(buffer, 0, n);
+			}
+			return HexFormat.of().formatHex(digest.digest());
+		} catch (IOException | NoSuchAlgorithmException e) {
+			return null;
 		}
 	}
 }
