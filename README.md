@@ -23,7 +23,7 @@ they're holding.
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.20.1 or newer for Minecraft 1.21.11.
 2. Put these in your `.minecraft/mods` folder:
-   - `player-characters-2.0.0.jar` (this mod), from the [Releases page](https://github.com/itamarbleiberg/buti/releases)
+   - `player-characters-2.0.0.jar` (this mod), from the [Releases page](https://github.com/itamarbleiberg/buti1/releases)
    - [Fabric API](https://modrinth.com/mod/fabric-api) for 1.21.11
    - [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) for Fabric 1.21.11 (needed for the talking mouths;
      the server must have Simple Voice Chat too, as usual)
