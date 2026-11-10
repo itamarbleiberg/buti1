@@ -4,14 +4,16 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.CharacterLibrary;
-import com.playercharacters.character.CharacterSkin;
+import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
 import com.playercharacters.gui.CharacterMenuScreen;
 import com.playercharacters.gui.CharacterPickerScreen;
+import com.playercharacters.render.CharacterRenderState;
 import com.playercharacters.voice.TalkTracker;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,16 +27,23 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Starts the real game, makes a world, and checks the mod end to end:
- * example characters, skins on another player, talking mouths, both key binds and the menus.
- * Screenshots end up in run/screenshots.
+ * Starts the real game, makes a world, and checks the mod end to end: example characters, the 3D alien and
+ * skin characters on another player (armor hidden, held item and name tag kept), talking jaws and mouths,
+ * both key binds and the menus. Screenshots end up in run/screenshots.
  */
 @SuppressWarnings("UnstableApiUsage")
 public class PlayerCharactersClientGameTest implements FabricClientGameTest {
@@ -50,13 +59,14 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			settings.setChoice(FRIEND, "Friend", Choice.DEFAULT);
 			settings.setChoice(client.getUser().getProfileId(), client.getUser().getName(), Choice.DEFAULT);
 		});
-
 		if (FabricLoader.getInstance().isModLoaded("voicechat")) {
 			context.runOnClient(client -> VoiceChatCheck.finishOnboarding());
 		}
 
-		List<String> ids = context.computeOnClient(client -> CharacterLibrary.all().stream().map(CharacterSkin::id).toList());
-		check(ids.equals(List.of("Frog", "Robot")), "example characters loaded, got " + ids);
+		List<String> ids = context.computeOnClient(client -> CharacterLibrary.all().stream().map(PlayerCharacter::id).toList());
+		check(ids.equals(List.of("Alien", "Frog", "Robot")), "example characters loaded, got " + ids);
+		check(CharacterLibrary.get("Alien").isModel(), "Alien is a 3D model");
+		check(CharacterLibrary.get("Alien").model().quadCount() > 5000, "Alien has " + CharacterLibrary.get("Alien").model().quadCount() + " polygons");
 		check(CharacterLibrary.get("Robot").customTalkingFrame(), "Robot uses Robot_talking.png");
 		check(!CharacterLibrary.get("Frog").customTalkingFrame(), "Frog uses the automatic mouth");
 		check(CharacterLibrary.problems().isEmpty(), "no load problems, got " + CharacterLibrary.problems());
@@ -67,110 +77,105 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			world.getClientWorld().waitForChunksRender();
 			context.runOnClient(client -> client.options.fov().set(40));
 
-			// Another player standing in front of us.
+			// Another player in diamond armor holding a sword, standing in front of us.
 			context.runOnClient(PlayerCharactersClientGameTest::spawnFriend);
 			context.waitTicks(10);
-			check(context.computeOnClient(client -> CharacterResolver.skinFor(FRIEND)) == null, "friend keeps own skin by default");
-			context.takeScreenshot("01-friend-own-skin");
+			check(context.computeOnClient(client -> CharacterResolver.characterFor(FRIEND)) == null, "friend keeps own skin by default");
+			context.takeScreenshot("01-friend-normal-with-armor");
 
-			// Default for everyone = Random.
-			context.runOnClient(client -> CharacterSettings.get().setDefaultChoice(Choice.RANDOM));
-			check(context.computeOnClient(client -> CharacterResolver.characterFor(FRIEND)) != null, "random default gives the friend a character");
-			context.waitTicks(2);
-			context.takeScreenshot("02-friend-random-default");
+			// A skin character: armor hidden, sword still there.
+			setChoice(context, Choice.character("Robot"));
+			checkSkin(context, FRIEND, "/idle");
+			context.takeScreenshot("02-friend-robot-no-armor");
 
-			// A specific character, quiet and talking.
-			context.runOnClient(client -> CharacterSettings.get().setChoice(FRIEND, "Friend", Choice.character("Robot")));
-			context.waitTicks(2);
-			checkTexture(context, FRIEND, "/idle");
-			context.takeScreenshot("03-friend-robot-quiet");
+			// The 3D alien, quiet and talking.
+			setChoice(context, Choice.character("Alien"));
+			checkRenderState(context, "Alien", false);
+			context.takeScreenshot("03-friend-alien-quiet");
 			try (Talking ignored = Talking.start(FRIEND)) {
-				context.waitTicks(3);
-				checkTexture(context, FRIEND, "/talking");
-				context.takeScreenshot("04-friend-robot-talking");
-
-				context.runOnClient(client -> CharacterSettings.get().setChoice(FRIEND, "Friend", Choice.character("Frog")));
-				context.waitTicks(3);
-				checkTexture(context, FRIEND, "/talking");
-				context.takeScreenshot("05-friend-frog-talking");
+				context.waitTicks(4);
+				checkRenderState(context, "Alien", true);
+				context.takeScreenshot("04-friend-alien-talking");
+				// Closer, from the side, looking a little down: shows the held sword and the open jaw.
+				context.runOnClient(client -> {
+					client.options.fov().set(30);
+					client.player.setXRot(9.0F);
+					turnFriend(client, 50.0F);
+				});
+				context.waitTicks(2);
+				context.takeScreenshot("05-friend-alien-talking-side");
+				context.runOnClient(client -> {
+					client.options.fov().set(40);
+					client.player.setXRot(0.0F);
+					turnFriend(client, 0.0F);
+				});
 
 				// "Toggle talking mouths" key (U).
 				context.getInput().pressKey(InputConstants.KEY_U);
-				context.waitTicks(3);
+				context.waitTicks(10);
 				check(!CharacterSettings.get().talkingMouths(), "U turned talking mouths off");
-				checkTexture(context, FRIEND, "/idle");
+				checkRenderState(context, "Alien", false);
 				context.takeScreenshot("06-mouths-off-while-talking");
 				context.getInput().pressKey(InputConstants.KEY_U);
 				context.waitTicks(3);
 				check(CharacterSettings.get().talkingMouths(), "U turned talking mouths back on");
+
+				// Skin characters still open their mouth too.
+				setChoice(context, Choice.character("Frog"));
+				checkSkin(context, FRIEND, "/talking");
+				context.takeScreenshot("07-friend-frog-talking");
 			}
 			context.waitTicks(10);
-			checkTexture(context, FRIEND, "/idle");
+			checkSkin(context, FRIEND, "/idle");
+			setChoice(context, Choice.character("Alien"));
+			context.waitTicks(10);
+			checkRenderState(context, "Alien", false);
 
 			// Both keys are listed in Options > Controls > Key Binds, where they can be changed.
-			check(context.computeOnClient(client -> java.util.Arrays.stream(client.options.keyMappings)
-					.filter(key -> key.getName().startsWith("key.playercharacters."))
-					.count()) == 2, "both keys are in the Key Binds menu");
-			context.setScreen(() -> new net.minecraft.client.gui.screens.options.controls.KeyBindsScreen(null, Minecraft.getInstance().options));
-			context.waitTicks(2);
-			context.runOnClient(client -> {
-				// Scroll so the "Open character menu" row (bound to K) is near the top.
-				ContainerObjectSelectionList<?> list = find(client.screen.children(), ContainerObjectSelectionList.class);
-				for (ContainerObjectSelectionList.Entry<?> entry : list.children()) {
-					if (!entry.children().isEmpty() && entry.children().getFirst() instanceof AbstractWidget button
-						&& button.getMessage().getString().equals("K")) {
-						list.setScrollAmount(list.scrollAmount() + entry.getY() - list.getY() - 30);
-						break;
-					}
-				}
-			});
-			context.waitTicks(2);
-			context.takeScreenshot("06b-key-binds");
-			context.setScreen(() -> null);
+			check(context.computeOnClient(client -> Arrays.stream(client.options.keyMappings)
+				.filter(key -> key.getName().startsWith("key.playercharacters.")).count()) == 2, "both keys are in the Key Binds menu");
 
 			// "Open character menu" key (K).
 			context.getInput().pressKey(InputConstants.KEY_K);
 			context.waitForScreen(CharacterMenuScreen.class);
-			context.takeScreenshot("07-menu");
+			context.takeScreenshot("08-menu");
 
-			// Click our own row's button, pick Robot in the picker, press Choose.
+			// Click our own row's button, pick the Alien in the picker, press Choose.
 			clickWidget(context, client -> {
 				ContainerObjectSelectionList<?> list = find(client.screen.children(), ContainerObjectSelectionList.class);
 				return (AbstractWidget) list.children().getFirst().children().getFirst();
 			});
 			context.waitForScreen(CharacterPickerScreen.class);
-			context.takeScreenshot("08-picker");
 			clickWidget(context, client -> {
 				ObjectSelectionList<?> list = find(client.screen.children(), ObjectSelectionList.class);
 				for (ObjectSelectionList.Entry<?> entry : list.children()) {
-					if (entry.getNarration().getString().contains("Robot")) {
+					if (entry.getNarration().getString().contains("Alien")) {
 						return new Area(entry.getX(), entry.getY(), entry.getWidth(), entry.getHeight());
 					}
 				}
-				throw new AssertionError("Robot is not in the picker");
+				throw new AssertionError("Alien is not in the picker");
 			});
-			context.waitTicks(2);
-			context.takeScreenshot("09-picker-robot-selected");
+			context.waitTicks(3);
+			context.takeScreenshot("09-picker-alien-preview");
 			context.clickScreenButton("playercharacters.picker.choose");
 			context.waitForScreen(CharacterMenuScreen.class);
 			UUID self = context.computeOnClient(client -> client.player.getUUID());
-			check(context.computeOnClient(client -> CharacterSettings.get().choiceFor(self)).equals(Choice.character("Robot")),
-				"picker saved Robot for us");
+			check(context.computeOnClient(client -> CharacterSettings.get().choiceFor(self)).equals(Choice.character("Alien")), "picker saved Alien for us");
 			context.clickScreenButton("playercharacters.menu.reload");
 			context.waitTicks(2);
-			check(context.computeOnClient(client -> CharacterLibrary.all().size()) == 2, "reload keeps both characters");
+			check(context.computeOnClient(client -> CharacterLibrary.all().size()) == 3, "reload keeps all three characters");
 			context.takeScreenshot("10-menu-after-choosing");
 			context.setScreen(() -> null);
 
 			// Ourselves in third person, talking. The friend would block the camera, so remove them first.
 			context.runOnClient(client -> {
-				client.level.removeEntity(client.level.getPlayerByUUID(FRIEND).getId(), net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
+				client.level.removeEntity(client.level.getPlayerByUUID(FRIEND).getId(), Entity.RemovalReason.DISCARDED);
+				client.player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.TORCH));
 				client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
 			});
 			try (Talking ignored = Talking.start(self)) {
-				context.waitTicks(3);
-				checkTexture(context, self, "/talking");
-				context.takeScreenshot("11-self-robot-talking");
+				context.waitTicks(4);
+				context.takeScreenshot("11-self-alien-talking");
 			}
 
 			// Real audio through Simple Voice Chat, when it is installed in the test game.
@@ -184,8 +189,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 
 			Path config = FabricLoader.getInstance().getConfigDir().resolve("playercharacters.json");
 			String saved = readString(config);
-			check(saved.contains("\"character:Robot\"") && saved.contains(FRIEND.toString()), "choices saved to playercharacters.json:\n" + saved);
+			check(saved.contains("\"character:Alien\"") && saved.contains(FRIEND.toString()), "choices saved to playercharacters.json:\n" + saved);
 		}
+	}
+
+	private static void setChoice(ClientGameTestContext context, Choice choice) {
+		context.runOnClient(client -> CharacterSettings.get().setChoice(FRIEND, "Friend", choice));
+		context.waitTicks(3);
 	}
 
 	private static void spawnFriend(Minecraft client) {
@@ -193,17 +203,51 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		RemotePlayer friend = new RemotePlayer(client.level, new GameProfile(FRIEND, "Friend"));
 		Vec3 forward = Vec3.directionFromRotation(0.0F, self.getYRot());
 		float facingUs = self.getYRot() + 180.0F;
-		friend.snapTo(self.getX() + forward.x * 3.0, self.getY(), self.getZ() + forward.z * 3.0, facingUs, 0.0F);
+		friend.snapTo(self.getX() + forward.x * 3.2, self.getY(), self.getZ() + forward.z * 3.2, facingUs, 0.0F);
 		friend.setYHeadRot(facingUs);
 		friend.setYBodyRot(facingUs);
 		friend.yHeadRotO = facingUs;
 		friend.yBodyRotO = facingUs;
+		friend.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.DIAMOND_HELMET));
+		friend.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.DIAMOND_CHESTPLATE));
+		friend.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.DIAMOND_LEGGINGS));
+		friend.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.DIAMOND_BOOTS));
+		friend.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_SWORD));
 		client.level.addEntity(friend);
 		self.setXRot(0.0F);
 	}
 
-	private static void checkTexture(ClientGameTestContext context, UUID player, String suffix) {
-		PlayerSkin skin = context.computeOnClient(client -> client.level.getPlayerByUUID(player) instanceof net.minecraft.client.player.AbstractClientPlayer p ? p.getSkin() : null);
+	/** Turns the friend away from facing us by {@code degrees}. */
+	private static void turnFriend(Minecraft client, float degrees) {
+		Entity friend = client.level.getPlayerByUUID(FRIEND);
+		float yaw = client.player.getYRot() + 180.0F + degrees;
+		friend.setYRot(yaw);
+		friend.yRotO = yaw;
+		friend.setYHeadRot(yaw);
+		friend.setYBodyRot(yaw);
+		if (friend instanceof RemotePlayer remote) {
+			remote.yHeadRotO = yaw;
+			remote.yBodyRotO = yaw;
+		}
+	}
+
+	/** Checks what the player renderer is told to draw for the friend this frame. */
+	private static void checkRenderState(ClientGameTestContext context, String character, boolean jawOpen) {
+		float[] jaw = new float[1];
+		String drawn = context.computeOnClient(client -> {
+			Entity friend = client.level.getPlayerByUUID(FRIEND);
+			EntityRenderState state = client.getEntityRenderDispatcher().getRenderer(friend).createRenderState(friend, 1.0F);
+			CharacterRenderState characterState = (CharacterRenderState) state;
+			jaw[0] = characterState.playercharacters$jaw();
+			PlayerCharacter drawnCharacter = characterState.playercharacters$character();
+			return drawnCharacter == null ? null : drawnCharacter.id();
+		});
+		check(character.equals(drawn), "friend is drawn as " + drawn);
+		check(jawOpen ? jaw[0] > 0.4F : jaw[0] < 0.05F, "jaw is " + (jawOpen ? "open" : "closed") + " (" + String.format("%.2f", jaw[0]) + ")");
+	}
+
+	private static void checkSkin(ClientGameTestContext context, UUID player, String suffix) {
+		PlayerSkin skin = context.computeOnClient(client -> client.level.getPlayerByUUID(player) instanceof AbstractClientPlayer p ? p.getSkin() : null);
 		check(skin != null && skin.body().texturePath().getPath().endsWith(suffix),
 			"rendered skin is the " + suffix.substring(1) + " frame (" + (skin == null ? null : skin.body().texturePath()) + ")");
 	}

@@ -41,6 +41,7 @@
 	"playercharacters.picker.random.desc": "Picked for them: %s",
 	"playercharacters.picker.random.desc_all": "Each player gets one of your characters",
 	"playercharacters.picker.random.empty": "No characters loaded yet",
+	"playercharacters.picker.model": "3D model with a moving jaw",
 	"playercharacters.picker.mouth.custom": "Custom talking face",
 	"playercharacters.picker.mouth.auto": "Automatic talking mouth"
 }

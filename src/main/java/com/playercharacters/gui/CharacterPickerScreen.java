@@ -2,7 +2,7 @@ package com.playercharacters.gui;
 
 import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.CharacterLibrary;
-import com.playercharacters.character.CharacterSkin;
+import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.Choice;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -10,7 +10,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
-import net.minecraft.client.gui.components.PlayerSkinWidget;
 import net.minecraft.client.gui.layouts.HeaderAndFooterLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
@@ -22,13 +21,12 @@ import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
-import net.minecraft.util.Util;
 import net.minecraft.world.entity.player.PlayerSkin;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Lists "Default", "Own skin", "Random" and every character, with a 3D preview that you can drag
- * to rotate. The preview opens and closes the mouth so you can see the talking face.
+ * Lists "Default", "Own skin", "Random" and every character, next to a preview of your own player as the
+ * highlighted character. The preview opens and closes the mouth so you can see what talking looks like.
  */
 public final class CharacterPickerScreen extends Screen {
 	private static final int ROW_HEIGHT = 26;
@@ -45,7 +43,7 @@ public final class CharacterPickerScreen extends Screen {
 	private final Consumer<Choice> onChosen;
 	private @Nullable HeaderAndFooterLayout layout;
 	private @Nullable OptionList list;
-	private @Nullable PlayerSkinWidget preview;
+	private @Nullable CharacterPreviewWidget preview;
 
 	public CharacterPickerScreen(Screen parent, @Nullable UUID playerId, @Nullable String playerName, Choice current, Consumer<Choice> onChosen) {
 		super(playerName == null
@@ -72,10 +70,9 @@ public final class CharacterPickerScreen extends Screen {
 		footer.addChild(Button.builder(CommonComponents.GUI_CANCEL, button -> this.onClose()).width(150).build());
 
 		OptionList list = new OptionList(layout);
-		PlayerSkinWidget preview = new PlayerSkinWidget(PREVIEW_WIDTH, 140, this.minecraft.getEntityModels(), this::previewSkin);
+		CharacterPreviewWidget preview = new CharacterPreviewWidget(PREVIEW_WIDTH, 140, this::previewCharacter);
 		this.list = list;
 		this.preview = preview;
-		this.addWidget(preview);            // first in line for mouse input, so dragging rotates it
 		this.addRenderableWidget(list);
 		this.addRenderableOnly(preview);    // drawn after the list, so the list background doesn't cover it
 		layout.visitWidgets(this::addRenderableWidget);
@@ -107,15 +104,10 @@ public final class CharacterPickerScreen extends Screen {
 		this.minecraft.setScreen(this.parent);
 	}
 
-	private PlayerSkin previewSkin() {
+	/** The character shown in the preview for the highlighted option, or null for the player's own skin. */
+	private @Nullable PlayerCharacter previewCharacter() {
 		Option selected = this.list == null ? null : this.list.getSelected();
-		Choice choice = selected == null ? Choice.OWN_SKIN : selected.choice;
-		CharacterSkin character = CharacterResolver.resolve(choice, this.previewPlayer);
-		if (character == null) {
-			return this.ownSkin();
-		}
-		boolean mouthOpen = (Util.getMillis() / 250L) % 2L == 1L;
-		return character.skin(mouthOpen);
+		return CharacterResolver.resolve(selected == null ? Choice.OWN_SKIN : selected.choice, this.previewPlayer);
 	}
 
 	private PlayerSkin ownSkin() {
@@ -145,9 +137,10 @@ public final class CharacterPickerScreen extends Screen {
 				randomDescription = Component.translatable("playercharacters.picker.random.desc_all");
 			}
 			this.addEntry(new Option(Choice.RANDOM, Component.translatable("playercharacters.choice.random"), randomDescription));
-			for (CharacterSkin character : CharacterLibrary.all()) {
+			for (PlayerCharacter character : CharacterLibrary.all()) {
 				this.addEntry(new Option(Choice.character(character.id()), Component.literal(character.displayName()),
-					Component.translatable(character.customTalkingFrame() ? "playercharacters.picker.mouth.custom" : "playercharacters.picker.mouth.auto")));
+					Component.translatable(character.isModel() ? "playercharacters.picker.model"
+						: character.customTalkingFrame() ? "playercharacters.picker.mouth.custom" : "playercharacters.picker.mouth.auto")));
 			}
 
 			for (Option option : this.children()) {
@@ -189,12 +182,7 @@ public final class CharacterPickerScreen extends Screen {
 			CharacterPickerScreen screen = CharacterPickerScreen.this;
 			int faceX = this.getContentX() + 3;
 			int faceY = this.getContentYMiddle() - FACE_SIZE / 2;
-			PlayerSkin face = this.face();
-			if (face != null) {
-				PlayerFaceRenderer.draw(guiGraphics, face, faceX, faceY, FACE_SIZE);
-			} else {
-				guiGraphics.drawCenteredString(screen.font, "?", faceX + FACE_SIZE / 2, faceY + 4, -1);
-			}
+			this.drawIcon(guiGraphics, faceX, faceY);
 
 			int textX = faceX + FACE_SIZE + 6;
 			int maxWidth = this.getContentRight() - textX - 2;
@@ -203,16 +191,20 @@ public final class CharacterPickerScreen extends Screen {
 				DESCRIPTION_COLOR);
 		}
 
-		private @Nullable PlayerSkin face() {
+		private void drawIcon(GuiGraphics guiGraphics, int x, int y) {
 			CharacterPickerScreen screen = CharacterPickerScreen.this;
 			if (this.choice.kind() == Choice.Kind.RANDOM && screen.playerId == null) {
-				return null;
+				guiGraphics.drawCenteredString(screen.font, "?", x + FACE_SIZE / 2, y + 4, -1);
+				return;
 			}
-			CharacterSkin character = CharacterResolver.resolve(this.choice, screen.previewPlayer);
+			PlayerCharacter character = CharacterResolver.resolve(this.choice, screen.previewPlayer);
 			if (character != null) {
-				return character.idleSkin();
+				CharacterIcons.draw(guiGraphics, screen.font, character, null, x, y, FACE_SIZE);
+			} else if (this.choice.kind() == Choice.Kind.RANDOM) {
+				guiGraphics.drawCenteredString(screen.font, "?", x + FACE_SIZE / 2, y + 4, -1);
+			} else {
+				PlayerFaceRenderer.draw(guiGraphics, screen.ownSkin(), x, y, FACE_SIZE);
 			}
-			return this.choice.kind() == Choice.Kind.RANDOM ? null : screen.ownSkin();
 		}
 
 		@Override

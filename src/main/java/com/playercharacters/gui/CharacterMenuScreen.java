@@ -2,6 +2,7 @@ package com.playercharacters.gui;
 
 import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.CharacterLibrary;
+import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -32,7 +33,6 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.Util;
-import net.minecraft.world.entity.player.PlayerSkin;
 import org.jspecify.annotations.Nullable;
 
 /** The menu opened with the "Open character menu" key: pick a character for each player on the server. */
@@ -285,10 +285,10 @@ public final class CharacterMenuScreen extends Screen {
 				guiGraphics.drawString(CharacterMenuScreen.this.font, YOU, textX + nameWidth + 4, textY, -1);
 			}
 
-			// The character's face next to the button. It moves its mouth while they talk.
-			PlayerSkin characterSkin = CharacterResolver.skinFor(this.id);
-			if (characterSkin != null) {
-				PlayerFaceRenderer.draw(guiGraphics, characterSkin, characterFaceX, faceY, FACE_SIZE);
+			// The character's picture next to the button. Skin characters move their mouth while they talk.
+			PlayerCharacter character = CharacterResolver.characterFor(this.id);
+			if (character != null) {
+				CharacterIcons.draw(guiGraphics, CharacterMenuScreen.this.font, character, CharacterResolver.skinFor(this.id), characterFaceX, faceY, FACE_SIZE);
 			}
 			this.button.render(guiGraphics, mouseX, mouseY, partialTick);
 		}

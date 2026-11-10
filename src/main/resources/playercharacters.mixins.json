@@ -3,7 +3,10 @@
 	"package": "com.playercharacters.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"AbstractClientPlayerMixin"
+		"AbstractClientPlayerMixin",
+		"AvatarRendererMixin",
+		"AvatarRenderStateMixin",
+		"LivingEntityRendererMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

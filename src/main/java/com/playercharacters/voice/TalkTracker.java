@@ -61,6 +61,12 @@ public final class TalkTracker {
 		return voice != null && voice.open && System.nanoTime() - voice.lastFrameNanos < STALE_AFTER_NANOS;
 	}
 
+	/** How wide the mouth should be: 0 when closed, otherwise 0.45 (quiet syllable) up to 1 (loudest). */
+	public static float mouthOpenness(UUID player) {
+		Voice voice = VOICES.get(player);
+		return voice != null && voice.open && System.nanoTime() - voice.lastFrameNanos < STALE_AFTER_NANOS ? voice.openness : 0.0F;
+	}
+
 	public static void clear() {
 		VOICES.clear();
 	}
@@ -79,6 +85,7 @@ public final class TalkTracker {
 		private float peakDb = PEAK_FLOOR_DB;
 		private int framesInState = MIN_CLOSED_FRAMES;
 		private volatile boolean open;
+		private volatile float openness;
 		private volatile long lastFrameNanos;
 
 		synchronized void update(float levelDb, long now) {
@@ -103,6 +110,8 @@ public final class TalkTracker {
 				this.open = true;
 				this.framesInState = 0;
 			}
+			float loudness = Math.max(0.0F, Math.min(1.0F, 1.0F - belowPeak / CLOSE_BELOW_DB));
+			this.openness = 0.45F + 0.55F * loudness;
 			this.lastFrameNanos = now;
 		}
 
