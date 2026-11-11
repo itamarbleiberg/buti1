@@ -3,6 +3,7 @@
   "size": 1.0,
   "jaw_angle": 30,
   "butt": [0, 0.66, -0.16],
+  "bounce": 0.06,
   "parts": {
     "head": { "pivot": [0, 1.14, 0] },
     "jaw": { "pivot": [0, 1.275, -0.07] },

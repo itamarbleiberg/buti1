@@ -9,6 +9,12 @@ import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
 import com.playercharacters.effects.CigaretteSmoke;
+import com.playercharacters.emote.Emote;
+import com.playercharacters.emote.EmoteChat;
+import com.playercharacters.emote.EmotePlayer;
+import com.playercharacters.emote.EmotePose;
+import com.playercharacters.emote.Emotes;
+import com.playercharacters.gui.EmoteWheelScreen;
 import com.playercharacters.effects.FartEffects;
 import com.playercharacters.effects.FartScreen;
 import com.playercharacters.effects.MiddleFingerEmote;
@@ -96,6 +102,10 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		if (v4jar != null) {
 			checkUpgradeFromVersion4(context, Path.of(v4jar));
 		}
+		String v5jar = System.getProperty("playercharacters.test.v5jar");
+		if (v5jar != null) {
+			checkUpgradeFromVersion5(context, Path.of(v5jar));
+		}
 		addSkinCharacter(context);
 
 		try (TestSingleplayerContext world = context.worldBuilder().create()) {
@@ -128,6 +138,36 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				}
 				context.waitTicks(10);
 			}
+
+			// Far away, simpler copies are drawn. Zoomed in to see that they still look right.
+			shot = 24;
+			for (String id : List.of("Alien", "SpongeBob", "Robot")) {
+				setChoice(context, Choice.character(id));
+				for (double distance : new double[] {18.0, 34.0}) {
+					context.runOnClient(client -> {
+						Entity friend = client.level.getPlayerByUUID(FRIEND);
+						Vec3 forward = Vec3.directionFromRotation(0.0F, client.player.getYRot());
+						friend.setPos(client.player.getX() + forward.x * distance, client.player.getY(), client.player.getZ() + forward.z * distance);
+						client.options.fov().set((int) Math.round(40 * 3.2 / distance));
+					});
+					context.waitTicks(5);
+					context.takeScreenshot(String.format("%02d-friend-%s-far-%d", shot++, id.toLowerCase(), (int) distance));
+				}
+			}
+			context.runOnClient(client -> {
+				Entity friend = client.level.getPlayerByUUID(FRIEND);
+				Vec3 forward = Vec3.directionFromRotation(0.0F, client.player.getYRot());
+				friend.setPos(client.player.getX() + forward.x * 3.2, client.player.getY(), client.player.getZ() + forward.z * 3.2);
+				client.options.fov().set(40);
+			});
+			context.waitTicks(5);
+
+			// 3D characters blink every few seconds.
+			setChoice(context, Choice.character("Frog"));
+			context.waitFor(client -> friendRenderState(client).playercharacters$blink(), 200);
+			check(true, "the frog blinks");
+			context.takeScreenshot("18b-friend-frog-blinking");
+			context.waitTicks(3);
 
 			// Penguins waddle: the whole penguin rocks from side to side while it walks.
 			setChoice(context, Choice.character("Penguin"));
@@ -225,6 +265,39 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			check(context.computeOnClient(client -> CigaretteSmoke.puffCount()) > puffs + 5, "smoke rises from the penguin's cigarette");
 			context.takeScreenshot("49-friend-penguin-smoking");
 			context.runOnClient(client -> client.options.fov().set(40));
+
+			// Emotes on the friend: 3D characters and a skin, with music for the dances.
+			context.runOnClient(client -> client.player.setXRot(8.0F));
+			shot = 70;
+			int notesBefore = context.computeOnClient(client -> EmotePlayer.notesPlayed());
+			String[][] emoteShots = {{"Alien", "default_dance"}, {"Blue", "six_seven"}, {"SpongeBob", "floss"}, {"Robot", "robot"}, {"Penguin", "dab"},
+				{"Frog", "griddy"}, {"Burger", "jumping_jacks"}, {"Skinny Alien", "zombie"}, {"Tester", "wave"}, {"Alien", "push_ups"}, {"SpongeBob", "sit"},
+				{"Blue", "heart"}, {"Tester", "air_guitar"}, {"Robot", "spin"}};
+			for (String[] emoteShot : emoteShots) {
+				setChoice(context, Choice.character(emoteShot[0]));
+				Emote emote = Emotes.byId(emoteShot[1]);
+				context.runOnClient(client -> EmotePlayer.start(client.level.getPlayerByUUID(FRIEND), emote));
+				context.waitTicks(emote == Emotes.SPIN ? 16 : 14);
+				float weight = context.computeOnClient(client -> {
+					EmotePose pose = friendRenderState(client).playercharacters$emote();
+					return pose == null ? 0.0F : pose.weight;
+				});
+				check(context.computeOnClient(client -> EmotePlayer.playing(FRIEND)) == emote && weight > 0.95F,
+					emoteShot[0] + " does the " + emoteShot[1] + " emote (" + String.format("%.2f", weight) + ")");
+				context.takeScreenshot(String.format("%02d-friend-%s-%s", shot++, emoteShot[0].toLowerCase().replace(' ', '-'), emoteShot[1]));
+				context.runOnClient(client -> EmotePlayer.stop(FRIEND));
+				context.waitTicks(8);
+				check(context.computeOnClient(client -> EmotePlayer.playing(FRIEND)) == null, emoteShot[0] + " stops the emote");
+			}
+			int notes = context.computeOnClient(client -> EmotePlayer.notesPlayed()) - notesBefore;
+			check(notes > 15, "the dances play their music (" + notes + " notes)");
+			check(Emotes.all().size() >= 30, "there are " + Emotes.all().size() + " emotes");
+			// A "/me waves" from another player makes their character wave.
+			context.runOnClient(client -> EmoteChat.onChat(FRIEND, "waves"));
+			context.waitTicks(2);
+			check(context.computeOnClient(client -> EmotePlayer.playing(FRIEND)) == Emotes.WAVE, "\"/me waves\" from another player makes them wave");
+			context.waitTicks(55);
+			context.runOnClient(client -> client.player.setXRot(0.0F));
 			context.runOnClient(client -> {
 				client.options.hideGui = false;
 				client.player.setXRot(0.0F);
@@ -235,7 +308,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 
 			// Both keys are listed in Options > Controls > Key Binds, where they can be changed.
 			check(context.computeOnClient(client -> Arrays.stream(client.options.keyMappings)
-				.filter(key -> key.getName().startsWith("key.playercharacters.")).count()) == 2, "both keys are in the Key Binds menu");
+				.filter(key -> key.getName().startsWith("key.playercharacters.")).count()) == 3, "all three keys are in the Key Binds menu");
 
 			// "Open character menu" key (K).
 			context.getInput().pressKey(InputConstants.KEY_K);
@@ -375,6 +448,51 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			context.waitTicks(60);
 			check(!context.computeOnClient(client -> FartScreen.isShowing()), "the green screen goes away again");
 
+			// The emote wheel (B): scroll to the next emote and click it. In first person, the camera turns to watch it.
+			context.runOnClient(client -> CharacterSettings.get().setChoice(self, client.getUser().getName(), Choice.character("Blue")));
+			context.getInput().pressKey(InputConstants.KEY_B);
+			context.waitForScreen(EmoteWheelScreen.class);
+			double[] middle = context.computeOnClient(client -> new double[] {client.getWindow().getScreenWidth() / 2.0, client.getWindow().getScreenHeight() / 2.0});
+			context.getInput().setCursorPos(middle[0], middle[1]);
+			context.waitTicks(5);
+			context.takeScreenshot("80-emote-wheel");
+			Emote firstChoice = context.computeOnClient(client -> ((EmoteWheelScreen) client.screen).selected());
+			context.getInput().scroll(-1);
+			context.waitTicks(10);
+			Emote chosen = context.computeOnClient(client -> ((EmoteWheelScreen) client.screen).selected());
+			check(chosen != firstChoice && Emotes.all().indexOf(chosen) == Emotes.all().indexOf(firstChoice) + 1,
+				"scrolling chose the next emote: " + chosen.id());
+			context.takeScreenshot("81-emote-wheel-scrolled");
+			for (int i = 0; i < 9; i++) {
+				context.getInput().scroll(-1); // past the end of the page
+			}
+			context.waitTicks(5);
+			check(context.computeOnClient(client -> Emotes.all().indexOf(((EmoteWheelScreen) client.screen).selected())) == Emotes.all().indexOf(chosen) + 9,
+				"scrolling on goes to the next page");
+			context.takeScreenshot("82-emote-wheel-page-2");
+			for (int i = 0; i < 9; i++) {
+				context.getInput().scroll(1);
+			}
+			context.waitTicks(3);
+			context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			context.waitFor(client -> client.screen == null, 40);
+			context.waitTicks(16);
+			check(context.computeOnClient(client -> EmotePlayer.playing(self)) == chosen
+				&& context.computeOnClient(client -> client.options.getCameraType()) == CameraType.THIRD_PERSON_FRONT,
+				"clicking played " + chosen.id() + ", watched from the front");
+			context.takeScreenshot("83-self-emote-from-wheel");
+			context.runOnClient(client -> EmotePlayer.stop(self));
+			context.waitTicks(10);
+			check(context.computeOnClient(client -> client.options.getCameraType()) == CameraType.FIRST_PERSON, "back to first person after the emote");
+			// Typing "/me does the Robot" goes through the server and comes back as an emote message.
+			context.runOnClient(client -> client.player.connection.sendCommand("me does the Robot"));
+			context.waitFor(client -> EmotePlayer.playing(self) == Emotes.ROBOT, 100);
+			check(true, "\"/me does the Robot\" makes our character do the Robot");
+			context.runOnClient(client -> EmotePlayer.stop(self));
+			context.waitTicks(10);
+			context.runOnClient(client -> client.options.setCameraType(CameraType.FIRST_PERSON));
+			context.runOnClient(client -> CharacterSettings.get().setChoice(self, client.getUser().getName(), Choice.character("Tester")));
+
 			Path config = FabricLoader.getInstance().getConfigDir().resolve("playercharacters.json");
 			String saved = readString(config);
 			check(saved.contains("\"character:Tester\"") && saved.contains(FRIEND.toString()) && saved.contains("\"fartDetection\": true")
@@ -400,6 +518,11 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			CharacterModel.Extras extras = character.model().extras();
 			check(!extras.madParts().isEmpty() && extras.middleFinger() != null && extras.middleFinger().vertexCount() > 0,
 				id + " has an angry face " + extras.madParts().keySet() + " and a middle finger");
+			check(!extras.blinkParts().isEmpty() && extras.bounce() > 0.0F, id + " blinks " + extras.blinkParts().keySet() + " and bobs as it walks");
+			int full = character.model().quadCount();
+			int near = character.model().forDistance(15.0 * 15.0).quadCount();
+			int far = character.model().forDistance(40.0 * 40.0).quadCount();
+			check(near < full * 0.75 && far < near * 0.8 && far > 300, id + " has simpler copies for far away: " + full + ", " + near + ", " + far + " polygons");
 		}
 		check(CharacterLibrary.get("Penguin").model().extras().waddleRadians() > 0.1F, "the penguin waddles");
 		check(CharacterLibrary.get("SpongeBob").model().extras().headTurn() == 0.3F && CharacterLibrary.get("Blue").model().extras().headTurn() == 0.0F,
@@ -532,6 +655,31 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8 && CharacterLibrary.get("Penguin").model().extras().smoke() != null
 			&& readString(folder.resolve("Penguin").resolve("model.obj")).equals(bundled(context, "Penguin/model.obj")),
 			"upgrade from 4: once the settings match again the penguin is updated too, and it smokes");
+	}
+
+	/** Puts all eight examples back the way version 5 left them: every one of them is updated. */
+	private static void checkUpgradeFromVersion5(ClientGameTestContext context, Path v5jar) {
+		Path folder = CharacterLibrary.folder();
+		List<String> examples = List.of("Alien", "Robot", "Frog", "Burger", "Penguin", "SpongeBob", "Skinny Alien", "Blue");
+		context.runOnClient(client -> {
+			try (java.nio.file.FileSystem jar = java.nio.file.FileSystems.newFileSystem(v5jar)) {
+				for (String example : examples) {
+					for (String file : List.of("model.obj", "character.json", "icon.png")) {
+						Files.copy(jar.getPath("assets/playercharacters/examples/" + example + "/" + file), folder.resolve(example).resolve(file),
+							java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+					}
+				}
+			} catch (IOException e) {
+				throw new AssertionError("Couldn't set up the version 5 folder", e);
+			}
+			CharacterLibrary.reload();
+		});
+		for (String example : examples) {
+			check(readString(folder.resolve(example).resolve("model.obj")).equals(bundled(context, example + "/model.obj"))
+				&& readString(folder.resolve(example).resolve("character.json")).equals(bundled(context, example + "/character.json")),
+				"upgrade: " + example + " of version 5 was updated");
+		}
+		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 8, "upgrade from 5: eight characters and no problems");
 	}
 
 	/** An example file as the mod has it. */

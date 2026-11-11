@@ -7,6 +7,9 @@ characters (the mod comes with an Alien, a Robot, a Frog, a Burger, a smoking Pe
 over and farts, and when they say "fuck you" or "fuck off", it shows the middle finger and looks mad for a few seconds.
 In first person you see your character's own arm, your middle finger, and a green screen when you fart.
 
+Press **B** for the emote wheel: 32 emotes like the Default Dance, the 67, the Floss, the Griddy, the Robot, push-ups and
+more, with note block music for the dances. Players who have the mod see your emotes too.
+
 While a player is shown as a character, you don't see their armor, but you still see their name tag and the item
 they're holding.
 
@@ -15,6 +18,10 @@ they're holding.
 | ![Penguin](screenshots/finger-penguin.png) | ![SpongeBob](screenshots/finger-spongebob.png) | ![Skinny Alien](screenshots/finger-skinny-alien.png) | ![67](screenshots/finger-67.png) |
 
 These four are saying "fuck you".
+
+| Emote wheel (B) | Default Dance | 67 | Jumping Jacks |
+|---|---|---|---|
+| ![Emote wheel](screenshots/emote-wheel.png) | ![Default Dance](screenshots/emote-default-dance.png) | ![67](screenshots/emote-67.png) | ![Jumping Jacks](screenshots/emote-jumping-jacks.png) |
 
 | The penguin smokes | First person: your own arm | Your middle finger | Farting turns your screen green |
 |---|---|---|---|
@@ -44,7 +51,7 @@ These four are saying "fuck you".
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.20.1 or newer for Minecraft 1.21.11.
 2. Put these in your `.minecraft/mods` folder:
-   - `player-characters-5.0.0.jar` (this mod), from the [Releases page](https://github.com/itamarbleiberg/buti1/releases)
+   - `player-characters-6.0.0.jar` (this mod), from the [Releases page](https://github.com/itamarbleiberg/buti1/releases)
    - [Fabric API](https://modrinth.com/mod/fabric-api) for 1.21.11
    - [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) for Fabric 1.21.11 (needed for talking mouths
      and the voice emotes; the server must have Simple Voice Chat too, as usual)
@@ -52,7 +59,7 @@ These four are saying "fuck you".
 The server does **not** need this mod. Characters are only shown on your screen: other players keep seeing
 normal players unless they install the mod and set it up themselves.
 
-The jar is about 58 MB because it contains an offline speech recognizer (see [Voice emotes](#voice-emotes)).
+The jar is about 61 MB because it contains an offline speech recognizer (see [Voice emotes](#voice-emotes)).
 
 Remove older versions of `player-characters-*.jar` from the mods folder first: two versions of the same mod don't load.
 
@@ -62,6 +69,7 @@ Remove older versions of `player-characters-*.jar` from the mods folder first: t
 |---|---|
 | **K** | Open the character menu |
 | **U** | Turn talking mouths on/off |
+| **B** | Open the emote wheel |
 
 Change the keys in **Options > Controls > Key Binds > Player Characters**.
 
@@ -73,6 +81,8 @@ In the character menu:
   (each player always gets the same one), or one specific character.
 - **Talking mouths** does the same as the U key.
 - **Farts** and **Middle finger** turn the voice emotes on or off.
+- **Emote music** turns the dances' note block tunes on or off (their volume is "Jukebox/Note Blocks" in the sound
+  settings), and **Share emotes** decides whether your emotes are sent to other players (see below).
 - **Characters folder** opens the folder with your characters. **Reload** loads new or changed files.
 
 Your choices are saved in `.minecraft/config/playercharacters.json`.
@@ -103,6 +113,30 @@ at, and when you fart your screen turns green while gas bubbles float up and pop
 - Vosk works on Windows (64-bit), macOS and Linux (64-bit). Where it can't start, the menu says "Fart detection
   unavailable" and typing the words in chat still works.
 
+## Emote wheel
+
+Press **B** (or hold it). The wheel shows 8 emotes at a time, on 4 pages, with your character doing the highlighted one
+in the middle:
+
+- Point the mouse at an emote, or scroll: scrolling past the last one of a page goes to the next page. The arrow keys,
+  the number keys 1 to 8 and the **<** **>** buttons work too.
+- Click (or press Enter) to play it. If you held B down while choosing, letting go of B plays it. Esc or a right click
+  closes the wheel.
+
+| Page 1 | Page 2 | Page 3 | Page 4 |
+|---|---|---|---|
+| Default Dance, 67, Floss, Wave, Dab, Griddy, Fart, Middle Finger | Clap, Salute, Facepalm, Laugh, Cry, Bow, Shrug, Think | Jumping Jacks, Spin, Chicken Dance, Robot, Disco, Air Guitar, Headbang, Hype | Flex, Push-Ups, Sit, Zombie, L Dance, Heart, Blow a Kiss, Cheer |
+
+Dances repeat until you move; the others play once. Walking, jumping, sneaking, attacking or using an item stops an
+emote. In first person the camera turns around to watch your character, and comes back afterwards. Dances play a short
+note block tune and music notes float up; some emotes have hearts, tears or sparkles.
+
+Every emote works for 3D characters, skin characters and normal skins. This mod only runs on clients, so emotes are
+shared through chat: playing one sends a `/me` message such as "* Steve does the Default Dance" (at most one every 2
+seconds, and only when someone else is online). Players with the mod see your character do the emote; everyone else
+just reads the message. Typing `/me waves` yourself works too. Turn it off with **Share emotes**; then only you see your
+emotes.
+
 ## Characters
 
 Characters live in `.minecraft/config/playercharacters/characters/`. The mod puts eight 3D examples there (Alien,
@@ -110,8 +144,8 @@ Robot, Frog, Burger, Penguin, SpongeBob, Skinny Alien and 67, which is in the fo
 details below. The penguin smokes: a thin line of smoke rises from its cigarette (except in your own first-person view,
 where it would be right in front of your eyes).
 
-Upgrading: examples from older versions are updated (version 5 turns Blue into 67 and remakes the Penguin, SpongeBob
-and the Skinny Alien), and the version 2 skin Robot and Frog are replaced by the 3D ones. If you changed any file of an
+Upgrading: examples from older versions are updated (version 6 makes all eight more detailed and lets them blink), and
+the version 2 skin Robot and Frog are replaced by the 3D ones. If you changed any file of an
 example, that whole example is kept as it is, so a new model never gets old settings.
 If a skin and a 3D folder have the same name, the 3D one is used and the menu tells you which file was skipped.
 
@@ -133,8 +167,9 @@ A folder with a `model.obj`, like `Alien/`:
   the wrong way), `jaw_angle` (degrees; negative opens the jaw upward like a lid, as the Burger's bun does),
   `butt` (where the fart cloud comes out), `waddle` (degrees it rocks from side to side while walking),
   `head_turn` (0 to 1: how much of the player's looking around the head copies), `smoke` (where smoke rises from,
-  moving with the head, like the tip of the penguin's cigarette), and per-part `pivot` (the joint) and `hand` (where
-  held items go).
+  moving with the head, like the tip of the penguin's cigarette), `bounce` (blocks the character bobs up and down with
+  each step), and per-part `pivot` (the joint) and `hand` (where held items go).
+- Objects named `blink_head` (or `blink_jaw`...) are closed eyelids: they show for a moment every few seconds.
   Without pivots, they're guessed from each part's size. A part can have a pivot without being in the model:
   the Burger has only a head pivot, so its bun turns with the head.
 - `icon.png` (optional): picture for the menu.
@@ -176,6 +211,13 @@ arm instead of Minecraft's (while your hand is empty, like Minecraft's arm); ski
   `MiddleFingerEmote` play the emotes: `PlayerModelMixin` and `CharacterPoses` bend the upper body, raise the arm and
   make characters waddle, which 3D characters, held items and the normal player model all follow.
   `VanillaEmoteParts` adds the finger and eyebrows to the normal player model.
+- `EmotePlayer` plays emotes: `Emotes` has their animations, written as math (waves and blends between poses in
+  seconds), and `CharacterPoses.emote` puts them on the player model, turning the head and arms with the body around the
+  hips. Emotes that jump, spin, lie down or sit move the whole character where the renderer turns it
+  (`AvatarRendererMixin`). `EmoteWheelScreen` is the wheel and `EmoteChat` shares emotes as `/me` messages.
+- 3D characters also blink, breathe, nod a little while talking and bob as they walk (`CharacterPoses`). Far away the
+  renderer draws simpler copies of each model, made when it loads by merging nearby corners (`ModelDetail`): about a
+  third of the polygons from 12 blocks, a fifth from 28.
 - In first person, `AvatarRendererMixin` swaps in a 3D character's own arm, `ItemInHandRendererMixin` and
   `FirstPersonHands` raise the middle finger in front of the camera, and `FartScreen` is a HUD layer with the green
   screen and its bubbles. `CigaretteSmoke` puts smoke particles at the tip of the penguin's cigarette, following its
@@ -198,8 +240,9 @@ SHA-256 (task `prepareSpeechModel`).
 
 `./gradlew runClientGameTest` starts the game, creates a world and checks the mod end to end (the example
 characters, a skin character on another player in armor, talking jaws, farts and middle fingers typed in chat, the
-penguin's smoke, your own arm, middle finger and green screen in first person, both keys, the menus, upgrading folders
-from versions 2, 3 and 4), saving screenshots to
+penguin's smoke, your own arm, middle finger and green screen in first person, 14 emotes on other players and the emote
+wheel, blinking, the simpler far-away copies, all three keys, the menus, upgrading folders from versions 2 to 5), saving
+screenshots to
 `build/run/clientGameTest/screenshots/`. If Simple Voice Chat is added to the test game, it also plays real voice
 chat audio and checks that mouths react to it, and with recorded sentences
 (`-Dplayercharacters.test.speechClips=<folder>`) that saying "fart", "fuck you" and "fuck off" works and lookalikes

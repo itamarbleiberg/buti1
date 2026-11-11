@@ -1,13 +1,14 @@
 package com.playercharacters.mixin;
 
 import com.playercharacters.character.PlayerCharacter;
+import com.playercharacters.emote.EmotePose;
 import com.playercharacters.render.CharacterRenderState;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-/** Lets each player's render state remember which character it is drawn as, and how its jaw, arms and face are posed. */
+/** Lets each player's render state remember which character it is drawn as, how its jaw, arms and face are posed, and its emote. */
 @Mixin(AvatarRenderState.class)
 public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	@Unique
@@ -20,6 +21,10 @@ public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	private float playercharacters$middleFinger;
 	@Unique
 	private boolean playercharacters$mad;
+	@Unique
+	private @Nullable EmotePose playercharacters$emote;
+	@Unique
+	private boolean playercharacters$blink;
 
 	@Override
 	public @Nullable PlayerCharacter playercharacters$character() {
@@ -69,5 +74,25 @@ public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	@Override
 	public void playercharacters$setMad(boolean mad) {
 		this.playercharacters$mad = mad;
+	}
+
+	@Override
+	public boolean playercharacters$blink() {
+		return this.playercharacters$blink;
+	}
+
+	@Override
+	public void playercharacters$setBlink(boolean blink) {
+		this.playercharacters$blink = blink;
+	}
+
+	@Override
+	public @Nullable EmotePose playercharacters$emote() {
+		return this.playercharacters$emote;
+	}
+
+	@Override
+	public void playercharacters$setEmote(@Nullable EmotePose pose) {
+		this.playercharacters$emote = pose;
 	}
 }

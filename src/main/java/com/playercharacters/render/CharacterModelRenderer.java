@@ -45,6 +45,7 @@ public final class CharacterModelRenderer {
 		int light, int overlay, int tint) {
 		// Drawing is deferred, so the player model hasn't been posed for this player yet; pose it now to read its angles.
 		playerModel.setupAnim(state);
+		model = model.forDistance(state.distanceToCameraSq); // fewer polygons far away, where details are too small to see
 		RenderType type = ARGB.alpha(tint) < 255 ? RenderTypes.itemEntityTranslucentCull(model.texture()) : RenderTypes.entityCutout(model.texture());
 		CharacterRenderState characterState = (CharacterRenderState) state;
 		float jawAngle = characterState.playercharacters$jaw() * model.jawOpenRadians();
@@ -59,6 +60,11 @@ public final class CharacterModelRenderer {
 		Map<Bone, Part> faceParts = characterState.playercharacters$mad() ? extras.madParts() : extras.calmParts();
 		for (Map.Entry<Bone, Part> entry : faceParts.entrySet()) {
 			submitPart(model, entry.getKey(), entry.getValue(), playerModel, jawAngle, poseStack, collector, type, light, overlay, tint);
+		}
+		if (characterState.playercharacters$blink()) {
+			for (Map.Entry<Bone, Part> entry : extras.blinkParts().entrySet()) {
+				submitPart(model, entry.getKey(), entry.getValue(), playerModel, jawAngle, poseStack, collector, type, light, overlay, tint);
+			}
 		}
 	}
 

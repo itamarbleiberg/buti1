@@ -31,6 +31,8 @@ public final class CharacterSettings {
 	private volatile boolean talkingMouths = true;
 	private volatile boolean fartDetection = true;
 	private volatile boolean middleFinger = true;
+	private volatile boolean emoteMusic = true;
+	private volatile boolean shareEmotes = true;
 	private volatile Choice defaultChoice = Choice.OWN_SKIN;
 
 	private CharacterSettings() {
@@ -66,6 +68,26 @@ public final class CharacterSettings {
 
 	public void setMiddleFinger(boolean enabled) {
 		this.middleFinger = enabled;
+		this.save();
+	}
+
+	/** Whether dancing emotes play their note block music. */
+	public boolean emoteMusic() {
+		return this.emoteMusic;
+	}
+
+	public void setEmoteMusic(boolean enabled) {
+		this.emoteMusic = enabled;
+		this.save();
+	}
+
+	/** Whether emotes from the emote wheel are also sent as a /me chat message, so other players with the mod see them. */
+	public boolean shareEmotes() {
+		return this.shareEmotes;
+	}
+
+	public void setShareEmotes(boolean enabled) {
+		this.shareEmotes = enabled;
 		this.save();
 	}
 
@@ -108,6 +130,8 @@ public final class CharacterSettings {
 			this.talkingMouths = data.talkingMouths;
 			this.fartDetection = data.fartDetection;
 			this.middleFinger = data.middleFinger;
+			this.emoteMusic = data.emoteMusic;
+			this.shareEmotes = data.shareEmotes;
 			this.defaultChoice = Choice.decode(data.defaultCharacter, Choice.OWN_SKIN);
 			if (this.defaultChoice.kind() == Choice.Kind.DEFAULT) {
 				this.defaultChoice = Choice.OWN_SKIN;
@@ -136,6 +160,8 @@ public final class CharacterSettings {
 		data.talkingMouths = this.talkingMouths;
 		data.fartDetection = this.fartDetection;
 		data.middleFinger = this.middleFinger;
+		data.emoteMusic = this.emoteMusic;
+		data.shareEmotes = this.shareEmotes;
 		data.defaultCharacter = this.defaultChoice.encode();
 		this.choices.entrySet().stream()
 			.sorted(Comparator.comparing(entry -> this.playerNames.getOrDefault(entry.getKey(), ""), String.CASE_INSENSITIVE_ORDER))
@@ -175,6 +201,8 @@ public final class CharacterSettings {
 		boolean talkingMouths = true;
 		boolean fartDetection = true;
 		boolean middleFinger = true;
+		boolean emoteMusic = true;
+		boolean shareEmotes = true;
 		String defaultCharacter = "own";
 		Map<String, PlayerData> players = new LinkedHashMap<>();
 	}

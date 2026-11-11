@@ -35,6 +35,11 @@ For the middle finger emote, a model can also have (all optional):
                   during the emote. Model it hanging down like right_arm, with the
                   finger pointing forward: the arm is raised to point forward, which
                   turns the finger up.
+  blink_head      closed eyelids, shown for a moment every few seconds so the
+                  character blinks. Any part works: blink_jaw, blink_body...
+
+Far away, the mod draws a simpler copy of each model with fewer polygons, so many
+detailed characters don't slow the game down.
 
 character.json, for example:
 
@@ -66,6 +71,8 @@ character.json, for example:
              because his whole sponge is his head.
   smoke      where a thin line of smoke rises from, moving with the head, like the
              tip of the Penguin's cigarette (optional)
+  bounce     how far (in blocks) the character bobs up and down with each step
+             while walking, e.g. 0.05 (default 0: no bobbing)
   parts      "pivot" is the joint a part turns around, "hand" is where held items go.
              Both are in the model's own coordinates. Without them, they are guessed
              from the size of each part. A part can have a pivot without being in the
@@ -118,5 +125,11 @@ character menu.
 In first person you see your 3D character's own arm. When you show the middle finger,
 your fist comes up in front of you, and when you fart, your screen turns green and
 bubbles pop.
+
+The emote wheel (B by default) has 32 emotes, from the Default Dance and the 67 to the
+Floss, the Griddy, the Robot and push-ups. Point the mouse at one or scroll to it, then
+click. Dances play a little note block tune. Players who have this mod see your emotes
+too: they are sent as a /me chat message, like "* Steve does the Default Dance" (turn
+that off with "Share emotes" in the character menu).
 
 The example characters can be deleted. They won't come back.

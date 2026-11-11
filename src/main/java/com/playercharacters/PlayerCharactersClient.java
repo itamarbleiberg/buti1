@@ -8,7 +8,10 @@ import com.playercharacters.effects.CigaretteSmoke;
 import com.playercharacters.effects.FartEffects;
 import com.playercharacters.effects.FartScreen;
 import com.playercharacters.effects.MiddleFingerEmote;
+import com.playercharacters.emote.EmoteChat;
+import com.playercharacters.emote.EmotePlayer;
 import com.playercharacters.gui.CharacterMenuScreen;
+import com.playercharacters.gui.EmoteWheelScreen;
 import java.util.regex.Pattern;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -37,6 +40,7 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 
 	private static KeyMapping openMenuKey;
 	private static KeyMapping toggleMouthsKey;
+	private static KeyMapping emoteWheelKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -47,6 +51,8 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 			new KeyMapping("key.playercharacters.open_menu", InputConstants.KEY_K, KEY_CATEGORY));
 		toggleMouthsKey = KeyBindingHelper.registerKeyBinding(
 			new KeyMapping("key.playercharacters.toggle_mouths", InputConstants.KEY_U, KEY_CATEGORY));
+		emoteWheelKey = KeyBindingHelper.registerKeyBinding(
+			new KeyMapping("key.playercharacters.emote_wheel", InputConstants.KEY_B, KEY_CATEGORY));
 
 		// Textures can only be created once the game window exists.
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> CharacterLibrary.reload());
@@ -58,6 +64,9 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
 			if (sender != null) {
 				String text = signedMessage != null ? signedMessage.signedContent() : message.getString();
+				if (EmoteChat.onChat(sender.id(), text)) {
+					return; // "/me waves" and the like, sent by the emote wheel
+				}
 				if (FART_IN_CHAT.matcher(text).find()) {
 					FartEffects.start(sender.id());
 				}
@@ -66,12 +75,23 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 				}
 			}
 		});
+		ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+			if (!overlay) {
+				EmoteChat.onSystemMessage(message.getString());
+			}
+		});
 	}
 
 	private static void onEndTick(Minecraft client) {
 		while (openMenuKey.consumeClick()) {
 			if (client.screen == null && client.getConnection() != null) {
 				client.setScreen(new CharacterMenuScreen(null));
+			}
+		}
+
+		while (emoteWheelKey.consumeClick()) {
+			if (client.screen == null && client.player != null) {
+				client.setScreen(new EmoteWheelScreen(emoteWheelKey));
 			}
 		}
 
@@ -89,6 +109,7 @@ public final class PlayerCharactersClient implements ClientModInitializer {
 		FartEffects.tick(client);
 		FartScreen.tick(client);
 		MiddleFingerEmote.tick(client);
+		EmotePlayer.tick(client);
 		CigaretteSmoke.tick(client);
 	}
 }

@@ -1,6 +1,7 @@
 package com.playercharacters.render;
 
 import com.playercharacters.character.PlayerCharacter;
+import com.playercharacters.emote.EmotePose;
 import org.jspecify.annotations.Nullable;
 
 /** Extra data added to the player render state (see {@code AvatarRenderStateMixin}). */
@@ -29,4 +30,14 @@ public interface CharacterRenderState {
 	boolean playercharacters$mad();
 
 	void playercharacters$setMad(boolean mad);
+
+	/** Whether the eyes are closed for a blink this frame. */
+	boolean playercharacters$blink();
+
+	void playercharacters$setBlink(boolean blink);
+
+	/** This frame's emote pose, or null when the player isn't doing an emote. */
+	@Nullable EmotePose playercharacters$emote();
+
+	void playercharacters$setEmote(@Nullable EmotePose pose);
 }

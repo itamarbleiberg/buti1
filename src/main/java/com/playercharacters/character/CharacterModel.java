@@ -53,14 +53,17 @@ public final class CharacterModel {
 	 * @param waddleRadians  how far the whole character rocks from side to side while walking
 	 * @param headTurn       how much of the player's head turning the head copies, from 0 to 1
 	 * @param smoke          model space: where smoke rises from (like the tip of a cigarette), moving with the head
+	 * @param blinkParts     closed eyelids, drawn for a moment every few seconds
+	 * @param bounce         how far (blocks) the character bobs up and down with each step
 	 */
 	public record Extras(Map<Bone, Part> madParts, Map<Bone, Part> calmParts, @Nullable Part middleFinger, float waddleRadians, float headTurn,
-		@Nullable Vector3f smoke) {
-		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null);
+		@Nullable Vector3f smoke, Map<Bone, Part> blinkParts, float bounce) {
+		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null, Map.of(), 0.0F);
 
 		public Extras {
 			madParts = madParts.isEmpty() ? Map.of() : new EnumMap<>(madParts);
 			calmParts = calmParts.isEmpty() ? Map.of() : new EnumMap<>(calmParts);
+			blinkParts = blinkParts.isEmpty() ? Map.of() : new EnumMap<>(blinkParts);
 		}
 	}
 
@@ -71,6 +74,10 @@ public final class CharacterModel {
 	private final Vector3f butt;
 	private final float height;
 	private final Extras extras;
+	/** Simpler copies for drawing far away (see {@link #forDistance}). */
+	private CharacterModel[] simpler = new CharacterModel[0];
+	/** Beyond these distances (squared, in blocks) the simpler copies are drawn. */
+	private static final double[] SIMPLER_FROM = {12.0 * 12.0, 28.0 * 28.0};
 
 	/**
 	 * @param jawOpenRadians how far the jaw turns when fully open; negative opens it upward (like a lid)
@@ -91,6 +98,41 @@ public final class CharacterModel {
 
 	public @Nullable Part part(Bone bone) {
 		return this.parts.get(bone);
+	}
+
+	/** The copy of this model to draw at this (squared) distance: simpler further away, where details are too small to see. */
+	public CharacterModel forDistance(double distanceSquared) {
+		for (int i = this.simpler.length - 1; i >= 0; i--) {
+			if (distanceSquared > SIMPLER_FROM[i]) {
+				return this.simpler[i];
+			}
+		}
+		return this;
+	}
+
+	/** Makes the simpler copies used far away. Called once, when the character is loaded. */
+	void makeSimplerCopies() {
+		CharacterModel[] copies = new CharacterModel[ModelDetail.CELLS.length];
+		for (int i = 0; i < copies.length; i++) {
+			copies[i] = this.simplified(ModelDetail.CELLS[i]);
+		}
+		this.simpler = copies;
+	}
+
+	private CharacterModel simplified(float cell) {
+		Map<Bone, Part> parts = new EnumMap<>(Bone.class);
+		this.parts.forEach((bone, part) -> parts.put(bone, ModelDetail.simplify(part, cell)));
+		Extras e = this.extras;
+		Extras extras = new Extras(simplify(e.madParts(), cell), simplify(e.calmParts(), cell),
+			e.middleFinger() == null ? null : ModelDetail.simplify(e.middleFinger(), cell), e.waddleRadians(), e.headTurn(), e.smoke(),
+			simplify(e.blinkParts(), cell), e.bounce());
+		return new CharacterModel(parts, this.texture, this.jawOpenRadians, this.hip, this.butt, this.height, extras);
+	}
+
+	private static Map<Bone, Part> simplify(Map<Bone, Part> parts, float cell) {
+		Map<Bone, Part> simpler = new EnumMap<>(Bone.class);
+		parts.forEach((bone, part) -> simpler.put(bone, ModelDetail.simplify(part, cell)));
+		return simpler;
 	}
 
 	public Identifier texture() {
@@ -126,6 +168,9 @@ public final class CharacterModel {
 			quads += part.vertexCount() / 4;
 		}
 		for (Part part : this.extras.calmParts().values()) {
+			quads += part.vertexCount() / 4;
+		}
+		for (Part part : this.extras.blinkParts().values()) {
 			quads += part.vertexCount() / 4;
 		}
 		if (this.extras.middleFinger() != null) {

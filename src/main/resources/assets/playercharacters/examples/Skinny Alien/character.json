@@ -4,6 +4,7 @@
   "jaw_angle": 22,
   "butt": [0, 1.02, -0.105],
   "head_turn": 0.75,
+  "bounce": 0.025,
   "parts": {
     "head": { "pivot": [0, 1.6, 0] },
     "jaw": { "pivot": [0, 2, -0.025] },

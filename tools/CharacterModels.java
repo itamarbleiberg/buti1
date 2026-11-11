@@ -70,6 +70,11 @@ public class CharacterModels {
 			return null;
 		}
 
+		/** How far the character bobs up and down with each step, in blocks. */
+		double bounce() {
+			return 0.03;
+		}
+
 		/** All parts in their final pose, with colors. */
 		abstract Map<String, Mesh> build();
 
@@ -100,9 +105,22 @@ public class CharacterModels {
 		}
 	}
 
-	/** Parts that are only drawn during the middle finger emote: an angry face, and a right arm making the gesture. */
+	/** Parts that are only drawn during the middle finger emote (an angry face and a right arm making the gesture), or a blink. */
 	static boolean isEmotePart(String name) {
-		return name.startsWith("mad_") || name.equals("middle_finger");
+		return name.startsWith("mad_") || name.equals("middle_finger") || name.startsWith("blink_");
+	}
+
+	/**
+	 * Closed eyelids over ellipsoid eyes, for blinking: shells covering each whole eye, a little bigger than it.
+	 *
+	 * @param eyes centers of the eyes
+	 */
+	static Mesh blinkLids(V[] eyes, V radius, double thickness) {
+		Mesh m = new Mesh();
+		for (V eye : eyes) {
+			m.append(eyelid(eye, radius, Math.signum(eye.x), 1.02, 0, thickness), 0);
+		}
+		return m;
 	}
 
 	/** Parts only drawn while the character is not mad (things the angry face replaces). */
@@ -171,11 +189,16 @@ public class CharacterModels {
 		static final V EYE_R = v(0.074, 0.040, 0.040);
 		static final double EYE_ROLL = Math.toRadians(24);
 		static final double EYE_YAW = Math.toRadians(24);
-		static final int SKIN = 0, EYE = 1, TEETH = 2, MOUTH = 3, CLAW = 4, LIP = 5;
+		static final int SKIN = 0, EYE = 1, TEETH = 2, MOUTH = 3, CLAW = 4, LIP = 5, GLINT = 6, NAIL = 7;
 
 		@Override
 		String name() {
 			return "Alien";
+		}
+
+		@Override
+		double bounce() {
+			return 0.03;
 		}
 
 		@Override
@@ -202,12 +225,13 @@ public class CharacterModels {
 			Map<String, Mesh> parts = new LinkedHashMap<>();
 			parts.put("head", buildHead());
 			parts.put("jaw", buildJaw());
-			parts.put("body", surfaceNets(Alien::bodySdf, v(-0.24, 0.84, -0.14), v(0.24, 1.70, 0.14), 0.0215));
+			parts.put("body", surfaceNets(Alien::bodySdf, v(-0.24, 0.84, -0.14), v(0.24, 1.70, 0.14), 0.0135));
 			parts.put("right_arm", buildArm(-1, false));
 			parts.put("left_arm", buildArm(1, false));
 			parts.put("right_leg", buildLeg(-1));
 			parts.put("left_leg", buildLeg(1));
 			parts.put("mad_head", buildMadHead());
+			parts.put("blink_head", buildBlink());
 			parts.put("middle_finger", buildArm(-1, true));
 			for (Map.Entry<String, Mesh> part : parts.entrySet()) {
 				String name = part.getKey();
@@ -217,7 +241,7 @@ public class CharacterModels {
 					V p = m.pos.get(i);
 					int material = m.material.get(i);
 					boolean onCut = Math.abs(jawRegion(p)) < 0.009 && skull(p) < -0.002;
-					if ((name.equals("head") || name.equals("jaw")) && material == SKIN && (skull(p) < -0.006 || cavity(p) < 0.008 || onCut)) {
+					if ((name.equals("head") || name.equals("jaw")) && material == SKIN && (skull(p) < -0.009 || cavity(p) < 0.008 || onCut)) {
 						material = skull(p) > -0.016 && cavity(p) > 0.004 ? LIP : MOUTH;
 					}
 					m.color.add(shade(material, name, p, m.nrm.get(i), m.extra.get(i)));
@@ -252,16 +276,22 @@ public class CharacterModels {
 		}
 
 		static Mesh buildHead() {
-			Mesh m = surfaceNets(p -> smax(smax(skull(p), -jawRegion(p), 0.012), -cavity(p), 0.012), v(-0.24, 1.55, -0.30), v(0.24, 2.03, 0.24), 0.0185);
+			Mesh m = surfaceNormals(surfaceNets(p -> smax(smax(skull(p), -jawRegion(p), 0.012), -cavity(p), 0.012), v(-0.24, 1.55, -0.30),
+				v(0.24, 2.03, 0.24), 0.0115), Alien::skull, 0.004);
 			for (int s = -1; s <= 1; s += 2) {
 				addEye(m, s);
+				// two highlights on each big black eye
+				V front = eyePoint(s, 0.0, 0.62, 1.0);
+				addEllipsoid(m, front, v(0.011, 0.007, 0.004), GLINT);
+				addEllipsoid(m, eyePoint(s, 0.42, -0.35, 1.0), v(0.004, 0.003, 0.002), GLINT);
 			}
 			addTeeth(m, true);
 			return m;
 		}
 
 		static Mesh buildJaw() {
-			Mesh m = surfaceNets(p -> smax(smax(skull(p), jawRegion(p), 0.012), -cavity(p), 0.012), v(-0.20, 1.53, -0.06), v(0.20, 1.76, 0.23), 0.0145);
+			Mesh m = surfaceNormals(surfaceNets(p -> smax(smax(skull(p), jawRegion(p), 0.012), -cavity(p), 0.012), v(-0.20, 1.53, -0.06), v(0.20, 1.76, 0.23),
+				0.0105), Alien::skull, 0.004);
 			addTeeth(m, false);
 			return m;
 		}
@@ -269,6 +299,37 @@ public class CharacterModels {
 		static double eyeSdf(V p, double grow, double pushBack) {
 			V q = rotZ(rotY(p.sub(EYE_C.add(v(0, 0, -pushBack))), -EYE_YAW), -EYE_ROLL);
 			return ellipsoid(q, v(0, 0, 0), EYE_R.mul(grow));
+		}
+
+		/**
+		 * A point on the surface of an eye: {@code u} along its long side (toward the outer corner), {@code w} up, as
+		 * fractions of its size, pushed out by {@code out}.
+		 */
+		static V eyePoint(int side, double u, double w, double out) {
+			double z = Math.sqrt(Math.max(0, 1 - u * u - w * w));
+			V local = v(u * EYE_R.x * out, w * EYE_R.y * out, z * EYE_R.z * out + 0.002);
+			V world = rotY(rotZ(local, EYE_ROLL), EYE_YAW).add(EYE_C).add(v(0, 0, -0.006));
+			return side < 0 ? world.withX(-world.x) : world;
+		}
+
+		/** Closed lids over the big eyes: skin shells shaped and tilted like the eyes, a little bigger. */
+		static Mesh buildBlink() {
+			Mesh m = new Mesh();
+			for (int side = -1; side <= 1; side += 2) {
+				Mesh lid = eyelid(v(0, 0, 0), EYE_R.mul(1.0), 1, 1.02, 0, 0.16);
+				for (int i = 0; i < lid.pos.size(); i++) {
+					V world = rotY(rotZ(lid.pos.get(i), EYE_ROLL), EYE_YAW).add(EYE_C).add(v(0, 0, -0.006));
+					V n = rotY(rotZ(lid.nrm.get(i), EYE_ROLL), EYE_YAW);
+					if (side < 0) {
+						world = world.withX(-world.x);
+						n = n.withX(-n.x);
+					}
+					lid.pos.set(i, world);
+					lid.nrm.set(i, n);
+				}
+				m.append(lid, SKIN);
+			}
+			return m;
 		}
 
 		static void addEye(Mesh m, int side) {
@@ -333,42 +394,125 @@ public class CharacterModels {
 			return m;
 		}
 
-		static Mesh buildArm(int side, boolean middleFinger) {
-			Mesh m = new Mesh();
-			double s = side;
-			addSphere(m, v(s * 0.185, 1.415, -0.010), 0.042, SKIN);
-			addTube(m, path(v(s * 0.19, 1.40, -0.01), v(s * 0.205, 1.24, -0.006), v(s * 0.215, 1.085, 0.0)), radii(0.035, 0.031, 0.025), 8, false, SKIN, CLAW);
-			addSphere(m, v(s * 0.215, 1.085, 0.0), 0.029, SKIN);
-			addTube(m, path(v(s * 0.215, 1.085, 0.0), v(s * 0.222, 0.95, 0.018), v(s * 0.226, 0.785, 0.045)), radii(0.027, 0.024, 0.017), 8, false, SKIN, CLAW);
-			addSphere(m, v(s * 0.226, 0.785, 0.045), 0.019, SKIN);
-			if (middleFinger) {
-				addFist(m, v(s * 0.228, 0.75, 0.058), v(0.02, 0.034, 0.03), 0.0078, 0.088, SKIN, SKIN);
-				addTube(m, path(v(s * 0.228, 0.75 + 0.0088 - 0.0068, 0.058 + 0.03 * 0.55 + 0.086), v(s * 0.228, 0.75 - 0.0062, 0.058 + 0.0165 + 0.106),
-					v(s * 0.228, 0.75 - 0.0055, 0.058 + 0.0165 + 0.12)), radii(0.0062, 0.0045, 0.002), 5, true, SKIN, CLAW);
-				return m;
-			}
-			addEllipsoid(m, v(s * 0.228, 0.745, 0.056), v(0.029, 0.042, 0.016), SKIN);
+		static double armShape(V p, double s) {
+			V shoulder = v(s * 0.19, 1.40, -0.01);
+			V elbow = v(s * 0.215, 1.085, 0.0);
+			V wrist = v(s * 0.226, 0.785, 0.045);
+			double d = SkinnyAlien.sphere(p, v(s * 0.185, 1.415, -0.010), 0.042);
+			d = smin(d, roundCone(p, shoulder, elbow, 0.035, 0.025), 0.03);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(shoulder, elbow, 0.4).add(v(0, 0, 0.008)), v(0.03, 0.09, 0.03)), 0.03);
+			d = smin(d, SkinnyAlien.sphere(p, elbow.add(v(0, 0.003, -0.012)), 0.027), 0.015); // the point of the elbow
+			d = smin(d, SkinnyAlien.sphere(p, elbow.add(v(s * 0.013, 0, 0.003)), 0.018), 0.012);
+			d = smin(d, roundCone(p, elbow, wrist, 0.026, 0.017), 0.02);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(elbow, wrist, 0.25).add(v(0, 0, 0.004)), v(0.025, 0.075, 0.025)), 0.03);
+			d = smin(d, SkinnyAlien.sphere(p, wrist.add(v(s * 0.011, 0, -0.004)), 0.011), 0.008); // wrist bones
+			return smax(d, wrist.y - 0.025 - p.y, 0.01);
+		}
+
+		/** A narrow hand with three long knuckled fingers and a thumb. */
+		static double handShape(V p, double s, List<V[]> tips) {
+			V palm = v(s * 0.228, 0.745, 0.056);
+			double d = ellipsoid(p, palm, v(0.016, 0.042, 0.029));
+			d = smin(d, SkinnyAlien.sphere(p, v(s * 0.226, 0.785, 0.045), 0.017), 0.02);
 			for (int f = -1; f <= 1; f++) {
-				double z = 0.056 + f * 0.017;
-				double reach = f == 0 ? 0.0 : 0.012;
-				addClawFinger(m, path(v(s * 0.228, 0.715, z), v(s * 0.234, 0.64 + reach, z + 0.010), v(s * 0.229, 0.552 + reach * 1.5, z + 0.024)), 0.0074);
+				V base = v(s * 0.228, 0.712, 0.056 + f * 0.017);
+				d = smin(d, SkinnyAlien.sphere(p, base, 0.0085), 0.006);
+				V[] tip = new V[2];
+				d = smin(d, SkinnyAlien.finger(p, base, v(s * 0.03, -1, 0.1), v(0, 0, 0.12), f == 0 ? 0.165 : 0.15, 0.0075, tip), 0.006);
+				if (tips != null) {
+					tips.add(tip);
+				}
 			}
-			addClawFinger(m, path(v(s * 0.220, 0.742, 0.078), v(s * 0.213, 0.690, 0.103), v(s * 0.210, 0.652, 0.112)), 0.0068);
+			V[] thumb = new V[2];
+			d = smin(d, SkinnyAlien.finger(p, v(s * 0.222, 0.74, 0.078), v(-s * 0.15, -0.8, 0.55), v(0, 0.02, 0.05), 0.075, 0.0072, thumb), 0.008);
+			if (tips != null) {
+				tips.add(thumb);
+			}
+			return d;
+		}
+
+		/** A fist with the long middle finger pointing forward (+Z), which is up once the arm is raised. */
+		static double fistShape(V p, double s, List<V[]> tips) {
+			V palm = v(s * 0.228, 0.75, 0.058);
+			double d = ellipsoid(p, palm, v(0.02, 0.036, 0.03));
+			d = smin(d, SkinnyAlien.sphere(p, v(s * 0.226, 0.785, 0.045), 0.017), 0.02);
+			for (int f = -1; f <= 1; f++) {
+				V knuckle = v(s * 0.228 + f * 0.011, 0.72, 0.076);
+				d = smin(d, SkinnyAlien.sphere(p, knuckle, 0.0088), 0.005);
+				if (f == 0) {
+					V[] tip = new V[2];
+					d = smin(d, SkinnyAlien.finger(p, knuckle, v(0, 0.08, 1), v(0, 0.02, 0), 0.12, 0.0075, tip), 0.006);
+					if (tips != null) {
+						tips.add(tip);
+					}
+				} else {
+					d = smin(d, roundCone(p, knuckle, knuckle.add(v(0, -0.02, 0.01)), 0.0078, 0.007), 0.004);
+					d = smin(d, roundCone(p, knuckle.add(v(0, -0.02, 0.01)), knuckle.add(v(0, -0.03, -0.012)), 0.007, 0.0062), 0.004);
+				}
+			}
+			return smin(d, roundCone(p, v(s * 0.216, 0.752, 0.075), v(s * 0.232, 0.724, 0.088), 0.0075, 0.007), 0.006); // thumb
+		}
+
+		static Mesh buildArm(int side, boolean middleFinger) {
+			double s = side;
+			Mesh m = surfaceNets(p -> armShape(p, s), v(s * 0.2 - 0.075, 0.74, -0.08), v(s * 0.2 + 0.085, 1.48, 0.1), 0.0095);
+			Sdf hand = middleFinger ? p -> fistShape(p, s, null) : p -> handShape(p, s, null);
+			m.append(middleFinger
+				? surfaceNets(hand, v(s * 0.228 - 0.04, 0.69, 0.0), v(s * 0.228 + 0.04, 0.81, 0.23), 0.0044)
+				: surfaceNets(hand, v(s * 0.228 - 0.06, 0.53, -0.0), v(s * 0.228 + 0.06, 0.81, 0.15), 0.0044), SKIN);
+			List<V[]> tips = new ArrayList<>();
+			if (middleFinger) {
+				fistShape(v(0, 0, 0), s, tips);
+			} else {
+				handShape(v(0, 0, 0), s, tips);
+			}
+			for (V[] tip : tips) {
+				addCone(m, tip[0].sub(tip[1].mul(0.004)), tip[0].add(tip[1].mul(0.018)), 0.0055, 6, NAIL);
+			}
 			return m;
 		}
 
-		static Mesh buildLeg(int side) {
-			Mesh m = new Mesh();
-			double s = side;
-			addSphere(m, v(s * 0.072, 0.93, 0.0), 0.056, SKIN);
-			addTube(m, path(v(s * 0.073, 0.93, 0.0), v(s * 0.078, 0.73, 0.012), v(s * 0.083, 0.525, 0.028)), radii(0.054, 0.046, 0.035), 9, false, SKIN, CLAW);
-			addSphere(m, v(s * 0.083, 0.525, 0.028), 0.038, SKIN);
-			addTube(m, path(v(s * 0.083, 0.525, 0.024), v(s * 0.085, 0.36, 0.0), v(s * 0.086, 0.09, -0.008)), radii(0.034, 0.033, 0.021), 8, false, SKIN, CLAW);
-			addSphere(m, v(s * 0.086, 0.09, -0.008), 0.024, SKIN);
-			addEllipsoid(m, v(s * 0.086, 0.042, -0.010), v(0.033, 0.040, 0.027), SKIN);
+		static double legShape(V p, double s) {
+			V hip = v(s * 0.073, 0.93, 0.0);
+			V knee = v(s * 0.083, 0.525, 0.028);
+			V ankle = v(s * 0.086, 0.09, -0.008);
+			double d = SkinnyAlien.sphere(p, hip, 0.056);
+			d = smin(d, roundCone(p, hip, knee, 0.054, 0.035), 0.04);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(hip, knee, 0.35).add(v(0, 0, 0.01)), v(0.045, 0.13, 0.046)), 0.04);
+			d = smin(d, ellipsoid(p, knee.add(v(0, 0.004, 0.022)), v(0.027, 0.03, 0.02)), 0.014); // kneecap
+			d = smin(d, SkinnyAlien.sphere(p, knee, 0.036), 0.02);
+			d = smin(d, roundCone(p, knee, ankle, 0.033, 0.021), 0.03);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(knee, ankle, 0.25).add(v(0, 0, -0.014)), v(0.03, 0.1, 0.03)), 0.03); // calf
+			d = smin(d, SkinnyAlien.sphere(p, ankle.add(v(s * 0.017, 0.004, 0)), 0.013), 0.008); // ankle bones
+			d = smin(d, SkinnyAlien.sphere(p, ankle.add(v(-s * 0.015, 0.01, 0)), 0.012), 0.008);
+			return smax(d, 0.06 - p.y, 0.01);
+		}
+
+		static double footShape(V p, double s, List<V[]> tips) {
+			V ankle = v(s * 0.086, 0.09, -0.008);
+			double d = SkinnyAlien.sphere(p, ankle.add(v(0, -0.02, 0)), 0.024);
+			d = smin(d, ellipsoid(p, v(s * 0.086, 0.042, -0.010), v(0.033, 0.040, 0.03)), 0.02);
 			for (int t = -1; t <= 1; t++) {
-				double dx = t * 0.014;
-				addClawFinger(m, path(v(s * (0.086 + dx), 0.036, 0.012), v(s * (0.086 + dx * 1.5), 0.020, 0.072), v(s * (0.086 + dx * 2.0), 0.009, 0.128 - Math.abs(t) * 0.012)), 0.012);
+				double dx = t * 0.015;
+				V base = v(s * (0.086 + dx), 0.03, 0.03);
+				d = smin(d, SkinnyAlien.sphere(p, base, 0.013), 0.01);
+				V[] tip = new V[2];
+				d = smin(d, SkinnyAlien.finger(p, base, v(s * dx * 3, -0.15, 1), v(0, -0.06, 0), 0.1 - Math.abs(t) * 0.012, 0.012, tip), 0.008);
+				if (tips != null) {
+					tips.add(tip);
+				}
+			}
+			return smax(d, -p.y + 0.002, 0.004);
+		}
+
+		static Mesh buildLeg(int side) {
+			double s = side;
+			Mesh m = surfaceNets(p -> legShape(p, s), v(s * 0.08 - 0.08, 0.05, -0.08), v(s * 0.08 + 0.08, 0.99, 0.09), 0.012);
+			m.append(surfaceNets(p -> footShape(p, s, null), v(s * 0.086 - 0.07, -0.002, -0.06), v(s * 0.086 + 0.07, 0.12, 0.17), 0.0056), SKIN);
+			List<V[]> tips = new ArrayList<>();
+			footShape(v(0, 0, 0), s, tips);
+			for (V[] tip : tips) {
+				addCone(m, tip[0].sub(tip[1].mul(0.005)), tip[0].add(tip[1].mul(0.02)), 0.0075, 6, NAIL);
 			}
 			return m;
 		}
@@ -398,7 +542,7 @@ public class CharacterModels {
 			for (int i = 0; i < m.pos.size(); i++) {
 				V p = m.pos.get(i);
 				switch (part) {
-					case "head", "jaw", "mad_head" -> {
+					case "head", "jaw", "mad_head", "blink_head" -> {
 						m.pos.set(i, headPose(p));
 						m.nrm.set(i, rotX(m.nrm.get(i), HEAD_TILT));
 					}
@@ -417,6 +561,10 @@ public class CharacterModels {
 			switch (material) {
 				case EYE:
 					return glossyBlack(n);
+				case GLINT:
+					return rgb(0.95, 0.97, 1.0);
+				case NAIL:
+					return rgb(0.16 + 0.12 * extra, 0.15 + 0.11 * extra, 0.12 + 0.1 * extra);
 				case TEETH: {
 					double root = clamp01(extra);
 					return rgb(0.93 - root * 0.12, 0.91 - root * 0.16, 0.82 - root * 0.22);
@@ -481,7 +629,11 @@ public class CharacterModels {
 
 	// ================================================================== Robot
 
-	/** A friendly metal robot: boxy head with a visor and glowing eyes, a jaw that drops open, chest lights, gripper hands. */
+	/**
+	 * A friendly metal robot: boxy head with a visor and glowing eyes, a jaw that drops open, panel seams and rivets,
+	 * shoulder pads, a glowing power core and chest lights, pistons on the forearms and shins, vents on the back, jointed
+	 * gripper hands and treaded feet.
+	 */
 	static final class Robot extends Design {
 		static final V HEAD_C = v(0, 1.70, 0.0);
 		static final V HEAD_H = v(0.17, 0.145, 0.15);
@@ -490,11 +642,18 @@ public class CharacterModels {
 		static final V JAW_PIVOT = v(0, 1.66, -0.06);
 		static final V CAVITY_C = v(0, 1.617, 0.045);
 		static final V CAVITY_H = v(0.118, 0.032, 0.085);
-		static final int METAL = 0, DARK = 1, GLOW = 2, VISOR = 3, RED = 4, YELLOW = 5, GREEN = 6, TEETH = 7, MOUTH = 8;
+		static final V EYE = v(0.058, 1.738, 0.138);
+		static final V EYE_R = v(0.012, 0.026, 0.034);
+		static final int METAL = 0, DARK = 1, GLOW = 2, VISOR = 3, RED = 4, YELLOW = 5, GREEN = 6, TEETH = 7, MOUTH = 8, CHROME = 9;
 
 		@Override
 		String name() {
 			return "Robot";
+		}
+
+		@Override
+		double bounce() {
+			return 0.015;
 		}
 
 		@Override
@@ -514,12 +673,20 @@ public class CharacterModels {
 				v(-0.105, 0.93, 0), v(0.105, 0.93, 0), v(0, 0.94, -0.13));
 		}
 
+		/** Cuts a seam into a surface: {@code band} is how far a point is from the seam's middle line. */
+		static double groove(double d, double band, double width, double depth) {
+			return smax(d, -Math.max(Math.abs(band) - width, -d - depth), 0.004);
+		}
+
 		static double head(V p) {
 			double d = roundBox(p, HEAD_C, HEAD_H, 0.06);
-			// visor recess across the face
-			d = smax(d, -roundBox(p, v(0, 1.735, 0.155), v(0.135, 0.045, 0.03), 0.025), 0.01);
+			d = smax(d, -roundBox(p, v(0, 1.735, 0.155), v(0.135, 0.045, 0.03), 0.025), 0.01); // visor recess
+			d = groove(d, p.y - 1.805, 0.006, 0.006); // seam around the top
+			d = groove(d, p.x, 0.005, 0.005 * smoothstep(0.0, -0.05, p.z)); // and down the back of the head
 			for (int s = -1; s <= 1; s += 2) { // ear bolts, also the jaw hinge
 				d = smin(d, roundCylinderX(p, v(s * 0.175, 1.66, -0.06), 0.045, 0.02, 0.008), 0.01);
+				d = smin(d, roundCylinderX(p, v(s * 0.197, 1.66, -0.06), 0.022, 0.012, 0.004), 0.006);
+				d = smax(d, -roundBox(p, v(s * 0.172, 1.76, 0.03), v(0.01, 0.022, 0.05), 0.004), 0.004); // side vents
 			}
 			return d;
 		}
@@ -536,92 +703,181 @@ public class CharacterModels {
 			double d = roundBox(p, v(0, 1.27, 0.0), v(0.205, 0.17, 0.125), 0.055);                 // chest
 			d = smin(d, roundBox(p, v(0, 1.40, -0.01), v(0.235, 0.05, 0.11), 0.04), 0.04);         // shoulder bar
 			d = smax(d, -roundBox(p, v(0, 1.28, 0.128), v(0.105, 0.075, 0.02), 0.012), 0.008);    // chest panel recess
+			d = groove(d, p.y - 1.15, 0.005, 0.006);                                              // seam under the chest
+			for (int s = -1; s <= 1; s += 2) {
+				d = groove(d, Math.abs(p.x) - 0.15 + 0.0 * s, 0.004, 0.005 * smoothstep(1.17, 1.2, p.y)); // side panel seams
+			}
+			for (int k = 0; k < 4; k++) { // vents on the back
+				d = smax(d, -roundBox(p, v(0, 1.33 - k * 0.04, -0.126), v(0.09, 0.008, 0.02), 0.004), 0.003);
+			}
 			d = Math.min(d, roundCylinderY(p, v(0, 1.07, 0), 0.10, 0.05, 0.02));                   // waist joint
+			d = groove(d, p.y - 1.07, 0.006, 0.008);
 			d = smin(d, roundBox(p, v(0, 0.955, 0), v(0.17, 0.07, 0.11), 0.035), 0.02);             // hips
 			d = Math.min(d, roundCylinderY(p, v(0, 1.50, -0.005), 0.055, 0.055, 0.015));           // neck
+			for (int k = 0; k < 3; k++) {
+				d = groove(d, p.y - (1.47 + k * 0.025), 0.004, 0.006 * smoothstep(1.44, 1.46, p.y));
+			}
 			return d;
 		}
 
 		static double leg(V p, double s) {
 			double d = roundCylinderY(p, v(s * 0.105, 0.725, 0), 0.052, 0.17, 0.02);                // thigh
+			d = groove(d, p.y - 0.80, 0.005, 0.006);
 			d = Math.min(d, ellipsoid(p, v(s * 0.105, 0.535, 0.012), v(0.068, 0.062, 0.068)));     // knee
 			d = Math.min(d, roundBox(p, v(s * 0.105, 0.30, 0.0), v(0.063, 0.205, 0.068), 0.03));   // shin
-			d = Math.min(d, roundBox(p, v(s * 0.105, 0.047, 0.045), v(0.078, 0.047, 0.125), 0.03)); // foot
+			d = smax(d, -roundBox(p, v(s * 0.105, 0.33, 0.07), v(0.038, 0.11, 0.012), 0.008), 0.005); // shin panel
+			d = Math.min(d, roundBox(p, v(s * 0.105, 0.047, 0.03), v(0.078, 0.047, 0.11), 0.03));  // foot
+			d = smin(d, roundBox(p, v(s * 0.105, 0.04, 0.14), v(0.07, 0.038, 0.035), 0.025), 0.01); // toe plate
+			d = groove(d, p.z - 0.105, 0.004, 0.006 * smoothstep(0.1, 0.07, p.y));
 			return d;
 		}
 
 		static double arm(V p, double s) {
-			double d = ellipsoid(p, v(s * 0.262, 1.40, 0), v(0.075, 0.075, 0.075));               // shoulder
+			V shoulder = v(s * 0.262, 1.40, 0);
+			double d = ellipsoid(p, shoulder, v(0.075, 0.075, 0.075));                            // shoulder
+			double pad = smax(ellipsoid(p, shoulder.add(v(s * 0.008, 0.03, 0)), v(0.095, 0.065, 0.095)), shoulder.y - 0.02 - p.y, 0.02);
+			d = Math.min(d, groove(pad, p.y - (shoulder.y + 0.03), 0.004, 0.006));               // shoulder pad
 			d = Math.min(d, roundCylinderY(p, v(s * 0.272, 1.215, 0), 0.042, 0.13, 0.015));         // upper arm
+			d = groove(d, p.y - 1.26, 0.004, 0.005);
 			d = Math.min(d, ellipsoid(p, v(s * 0.272, 1.065, 0.005), v(0.052, 0.052, 0.052)));     // elbow
 			d = Math.min(d, roundBox(p, v(s * 0.272, 0.90, 0.02), v(0.055, 0.13, 0.058), 0.028)); // forearm
+			d = smax(d, -roundBox(p, v(s * 0.272, 0.92, 0.078), v(0.032, 0.08, 0.01), 0.006), 0.004); // forearm panel
 			d = Math.min(d, roundBox(p, v(s * 0.272, 0.725, 0.035), v(0.03, 0.045, 0.046), 0.015)); // palm
 			return d;
+		}
+
+		/** A rounded bolt head on a surface. */
+		static void addRivet(Mesh m, Sdf surface, V from, V direction) {
+			V hit = hitSurface(surface, from, direction, 0.3);
+			if (hit != null) {
+				V n = gradient(surface, hit, 0.002).norm();
+				addOrientedEllipsoid(m, hit, n, 0, v(0.0085, 0.0045, 0.0085), CHROME);
+			}
+		}
+
+		/** A piston: a dark cylinder with a chrome rod sliding out of it. */
+		static void addPiston(Mesh m, V from, V to, double radius) {
+			V mid = from.add(to).mul(0.5);
+			addTube(m, path(from, from.add(mid).mul(0.5), mid), radii(radius, radius, radius), 8, false, DARK, DARK);
+			addTube(m, path(mid, mid.add(to).mul(0.5), to), radii(radius * 0.55, radius * 0.55, radius * 0.55), 8, false, CHROME, CHROME);
+		}
+
+		/** A gripper finger with two segments. */
+		static void addGripper(Mesh m, V base, V knuckle, V tip, double radius) {
+			addTube(m, path(base, base.add(knuckle).mul(0.5), knuckle), radii(radius, radius, radius * 0.95), 7, false, DARK, DARK);
+			addSphere(m, knuckle, radius * 1.15, CHROME);
+			addTube(m, path(knuckle, knuckle.add(tip).mul(0.5), tip), radii(radius * 0.9, radius * 0.85, radius * 0.7), 7, false, DARK, DARK);
+		}
+
+		static Mesh armMesh(double s, boolean middleFinger) {
+			Mesh arm = surfaceNets(p -> arm(p, s), v(s * 0.272 - 0.11, 0.66, -0.11), v(s * 0.272 + 0.11, 1.5, 0.11), 0.013);
+			addPiston(arm, v(s * 0.272, 1.03, -0.05), v(s * 0.272, 0.80, -0.07), 0.013);
+			for (int k = -1; k <= 1; k += 2) {
+				addRivet(arm, p -> arm(p, s), v(s * (0.262 + k * 0.05), 1.55, 0.0), v(0, -1, 0));
+				addRivet(arm, p -> arm(p, s), v(s * 0.262, 1.55, k * 0.05), v(0, -1, 0));
+			}
+			if (middleFinger) {
+				for (int f = -1; f <= 1; f += 2) { // curled grippers
+					addGripper(arm, v(s * (0.272 + f * 0.02), 0.695, 0.06), v(s * (0.272 + f * 0.021), 0.678, 0.083), v(s * (0.272 + f * 0.02), 0.688, 0.092),
+						0.0105);
+				}
+				addGripper(arm, v(s * 0.272, 0.705, 0.07), v(s * 0.272, 0.707, 0.135), v(s * 0.272, 0.71, 0.195), 0.016);
+				return arm;
+			}
+			for (int f = -1; f <= 1; f += 2) { // two gripper fingers and a thumb
+				addGripper(arm, v(s * (0.272 + f * 0.018), 0.69, 0.05), v(s * (0.272 + f * 0.022), 0.635, 0.075), v(s * (0.272 + f * 0.012), 0.597, 0.088),
+					0.0105);
+			}
+			addGripper(arm, v(s * 0.255, 0.71, 0.075), v(s * 0.25, 0.672, 0.107), v(s * 0.258, 0.645, 0.118), 0.0095);
+			return arm;
+		}
+
+		static Mesh legMesh(double s) {
+			Mesh leg = surfaceNets(p -> leg(p, s), v(s * 0.105 - 0.10, -0.01, -0.10), v(s * 0.105 + 0.10, 0.92, 0.2), 0.0135);
+			addPiston(leg, v(s * 0.105, 0.47, -0.062), v(s * 0.105, 0.17, -0.072), 0.012);
+			for (int k = 0; k < 4; k++) { // treads under the foot
+				addBox(leg, v(s * 0.105, 0.004, -0.05 + k * 0.055), v(0.07, 0.006, 0.012), DARK);
+			}
+			for (int k = -1; k <= 1; k += 2) {
+				addRivet(leg, p -> leg(p, s), v(s * (0.105 + k * 0.035), 0.42, 0.3), v(0, 0, -1));
+			}
+			return leg;
 		}
 
 		@Override
 		Map<String, Mesh> build() {
 			Map<String, Mesh> parts = new LinkedHashMap<>();
-			Mesh headMesh = surfaceNets(p -> smax(smax(head(p), -jawRegion(p), 0.006), -cavity(p), 0.006), v(-0.24, 1.53, -0.20), v(0.24, 1.88, 0.22), 0.019);
+			Sdf headShape = p -> smax(smax(head(p), -jawRegion(p), 0.006), -cavity(p), 0.006);
+			Mesh headMesh = surfaceNormals(surfaceNets(headShape, v(-0.24, 1.53, -0.20), v(0.24, 1.88, 0.22), 0.0115), Robot::head, 0.004);
 			addEyes(headMesh);
 			addAntenna(headMesh);
 			addTeethRow(headMesh, true);
+			for (int sx = -1; sx <= 1; sx += 2) { // rivets in the corners of the face
+				for (int sy = 0; sy <= 1; sy++) {
+					addRivet(headMesh, Robot::head, v(sx * 0.135, 1.665 + sy * 0.13, 0.3), v(0, 0, -1));
+				}
+			}
 			parts.put("head", finish(headMesh, (p, n, m, e) -> paintHead(p, n, m, true)));
 
-			Mesh jawMesh = surfaceNets(p -> smax(smax(head(p), jawRegion(p), 0.006), -cavity(p), 0.006), v(-0.20, 1.53, -0.09), v(0.20, 1.66, 0.19), 0.016);
+			Mesh jawMesh = surfaceNormals(surfaceNets(p -> smax(smax(head(p), jawRegion(p), 0.006), -cavity(p), 0.006), v(-0.20, 1.53, -0.09),
+				v(0.20, 1.66, 0.19), 0.0105), Robot::head, 0.004);
 			addTeethRow(jawMesh, false);
 			parts.put("jaw", finish(jawMesh, (p, n, m, e) -> paintHead(p, n, m, false)));
 
-			Mesh bodyMesh = surfaceNets(Robot::body, v(-0.27, 0.87, -0.16), v(0.27, 1.57, 0.17), 0.022);
+			Mesh bodyMesh = surfaceNets(Robot::body, v(-0.27, 0.87, -0.16), v(0.27, 1.57, 0.17), 0.0135);
 			int[] lights = {RED, YELLOW, GREEN, GLOW};
 			for (int i = 0; i < 4; i++) {
-				addEllipsoid(bodyMesh, v(-0.06 + i * 0.04, 1.31, 0.118), v(0.008, 0.014, 0.014), lights[i]);
+				addEllipsoid(bodyMesh, v(-0.075 + i * 0.05, 1.325, 0.118), v(0.009, 0.013, 0.012), lights[i]);
 			}
-			for (int i = 0; i < 3; i++) { // speaker grille slots
-				addEllipsoid(bodyMesh, v(0, 1.245 - i * 0.022, 0.116), v(0.006, 0.0045, 0.06), DARK);
+			// the power core: a glowing disc in a dark ring
+			addCylinder(bodyMesh, v(0, 1.258, 0.108), v(0, 0, 1), 0.034, 0.01, 18, GLOW);
+			addTorus(bodyMesh, v(0, 1.258, 0.118), v(0, 0, 1), 0.037, 0.007, 22, 6, DARK);
+			for (int i = 0; i < 4; i++) { // speaker grille slots
+				addBox(bodyMesh, v(0.0, 1.208 - i * 0.0, 0.0).add(v(-0.045 + i * 0.03, 0, 0.112)), v(0.006, 0.012, 0.006), DARK);
+			}
+			for (int sx = -1; sx <= 1; sx += 2) {
+				for (int sy = -1; sy <= 1; sy += 2) {
+					addRivet(bodyMesh, Robot::body, v(sx * 0.12, 1.28 + sy * 0.088, 0.3), v(0, 0, -1));
+					addRivet(bodyMesh, Robot::body, v(sx * 0.17, 1.27 + sy * 0.07, 0.3), v(0, 0, -1));
+				}
 			}
 			parts.put("body", finish(bodyMesh, (p, n, m, e) -> paintBody(p, n, m)));
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				Mesh arm = surfaceNets(p -> arm(p, s), v(s * 0.272 - 0.09, 0.66, -0.09), v(s * 0.272 + 0.09, 1.49, 0.10), 0.02);
-				for (int f = -1; f <= 1; f += 2) { // two gripper fingers and a thumb
-					addTube(arm, path(v(s * (0.272 + f * 0.018), 0.69, 0.05), v(s * (0.272 + f * 0.022), 0.635, 0.075), v(s * (0.272 + f * 0.016), 0.60, 0.09)), radii(0.011, 0.01, 0.008), 6, false, DARK, DARK);
-				}
-				addTube(arm, path(v(s * 0.255, 0.71, 0.075), v(s * 0.25, 0.67, 0.105), v(s * 0.255, 0.645, 0.115)), radii(0.01, 0.009, 0.007), 6, false, DARK, DARK);
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, (p, n, m, e) -> paintLimb(p, n, m)));
-
-				Mesh leg = surfaceNets(p -> leg(p, s), v(s * 0.105 - 0.10, -0.01, -0.10), v(s * 0.105 + 0.10, 0.92, 0.19), 0.021);
-				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg, (p, n, m, e) -> paintLimb(p, n, m)));
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(armMesh(s, false), (p, n, m, e) -> paintLimb(p, n, m)));
+				parts.put(side < 0 ? "right_leg" : "left_leg", finish(legMesh(s), (p, n, m, e) -> paintLimb(p, n, m)));
 			}
 
 			// Angry: the eyes glow red under slanted shutters.
 			Mesh mad = new Mesh();
 			for (int s = -1; s <= 1; s += 2) {
-				addEllipsoid(mad, v(s * 0.058, 1.738, 0.1395), v(0.0128, 0.0275, 0.0355), RED);
+				addEllipsoid(mad, v(s * EYE.x, EYE.y, EYE.z + 0.0015), EYE_R.mul(1.06), RED);
 				addTube(mad, path(v(s * 0.104, 1.771, 0.153), v(s * 0.06, 1.762, 0.154), v(s * 0.018, 1.745, 0.153)), radii(0.012, 0.012, 0.011), 6, false, DARK, DARK);
 			}
 			parts.put("mad_head", finish(mad, (p, n, m, e) -> paintMetal(p, n, m)));
 
-			// The right arm with one gripper finger sticking out.
-			double s = -1;
-			Mesh finger = surfaceNets(p -> arm(p, s), v(s * 0.272 - 0.09, 0.66, -0.09), v(s * 0.272 + 0.09, 1.49, 0.10), 0.02);
-			for (int f = -1; f <= 1; f += 2) {
-				addTube(finger, path(v(s * (0.272 + f * 0.02), 0.695, 0.06), v(s * (0.272 + f * 0.021), 0.678, 0.083), v(s * (0.272 + f * 0.02), 0.688, 0.092)), radii(0.011, 0.01, 0.009), 6, false, DARK, DARK);
+			// Blinking: dark shutters slide over the eyes.
+			Mesh blink = new Mesh();
+			for (int s = -1; s <= 1; s += 2) {
+				addEllipsoid(blink, v(s * EYE.x, EYE.y, EYE.z + 0.003), EYE_R.mul(1.12), DARK);
 			}
-			addTube(finger, path(v(s * 0.272, 0.705, 0.07), v(s * 0.272, 0.708, 0.135), v(s * 0.272, 0.71, 0.195)), radii(0.018, 0.017, 0.016), 8, false, METAL, METAL);
-			parts.put("middle_finger", finish(finger, (p, n, m, e) -> paintLimb(p, n, m)));
+			parts.put("blink_head", finish(blink, (p, n, m, e) -> paintMetal(p, n, m)));
+			parts.put("middle_finger", finish(armMesh(-1, true), (p, n, m, e) -> paintLimb(p, n, m)));
 			return parts;
 		}
 
 		static void addEyes(Mesh m) {
 			for (int s = -1; s <= 1; s += 2) {
-				addEllipsoid(m, v(s * 0.058, 1.738, 0.138), v(0.012, 0.026, 0.034), GLOW);
+				V eye = EYE.withX(s * EYE.x);
+				addEllipsoid(m, eye, EYE_R, GLOW);
+				addTorus(m, eye.add(v(0, 0, EYE_R.z * 0.55)), v(0, 0, 1), 0.019, 0.004, 16, 5, DARK); // eye socket ring
 			}
 		}
 
 		static void addAntenna(Mesh m) {
-			addTube(m, path(v(0, 1.83, -0.02), v(0, 1.90, -0.025), v(0, 1.97, -0.03)), radii(0.011, 0.009, 0.008), 6, false, DARK, DARK);
+			addCylinder(m, v(0, 1.835, -0.02), v(0, 1, 0), 0.022, 0.012, 14, DARK);
+			addTube(m, path(v(0, 1.83, -0.02), v(0, 1.90, -0.025), v(0, 1.97, -0.03)), radii(0.011, 0.009, 0.008), 7, false, CHROME, CHROME);
 			addSphere(m, v(0, 1.985, -0.03), 0.026, RED);
 		}
 
@@ -630,7 +886,7 @@ public class CharacterModels {
 			for (int i = 0; i < 7; i++) {
 				double x = -0.09 + i * 0.03;
 				double y = upper ? CAVITY_C.y + CAVITY_H.y - 0.006 : CAVITY_C.y - CAVITY_H.y + 0.006;
-				addBox(m, v(x, y + (upper ? -0.013 : 0.013), 0.112), v(0.011, 0.014, 0.008), TEETH);
+				addBevelBox(m, v(x, y + (upper ? -0.013 : 0.013), 0.112), v(1, 0, 0), v(0, 1, 0), v(0, 0, 1), v(0.011, 0.014, 0.008), 0.003, TEETH, TEETH);
 			}
 		}
 
@@ -648,6 +904,11 @@ public class CharacterModels {
 				double back = clamp01((CAVITY_C.z - p.z) / CAVITY_H.z);
 				return rgb(0.04 + 0.25 * back, 0.05 + 0.75 * back, 0.07 + 0.85 * back); // dark, glowing cyan at the back
 			}
+			if (material == VISOR) {
+				double scan = Math.abs(p.y - 1.705) < 0.004 ? 0.25 : 0; // a faint scan line
+				double shine = Math.pow(Math.max(0, n.dot(v(0.3, 0.8, 0.5).norm())), 10) * 0.35;
+				return rgb(0.05 + shine, 0.07 + shine + scan, 0.10 + shine + scan);
+			}
 			return paintMetal(p, n, material);
 		}
 
@@ -658,13 +919,16 @@ public class CharacterModels {
 			if (material == METAL && (Math.abs(p.y - 1.07) < 0.06 || p.y > 1.44)) {
 				material = DARK; // waist and neck joints
 			}
+			if (material == METAL && p.z < -0.11 && Math.abs(p.x) < 0.1 && p.y > 1.19 && p.y < 1.35) {
+				material = DARK; // vents
+			}
 			return paintMetal(p, n, material);
 		}
 
 		double[] paintLimb(V p, V n, int material) {
 			if (material == METAL) {
 				double y = p.y;
-				boolean joint = Math.abs(y - 1.065) < 0.05 || Math.abs(y - 0.535) < 0.05 || Math.abs(y - 1.40) < 0.06 && Math.abs(p.x) > 0.2;
+				boolean joint = Math.abs(y - 1.065) < 0.05 || Math.abs(y - 0.535) < 0.05 || Math.abs(y - 1.40) < 0.06 && Math.abs(p.x) > 0.2 && y < 1.41;
 				if (joint) {
 					material = DARK;
 				}
@@ -675,25 +939,27 @@ public class CharacterModels {
 		static double[] paintMetal(V p, V n, int material) {
 			double brushed = noise(v(p.x * 60, p.y * 6, p.z * 60)) * 0.035 + noise(p.mul(14)) * 0.03;
 			double rim = Math.pow(1 - Math.abs(n.y), 2) * 0.05;
+			double spec = Math.pow(Math.max(0, n.dot(v(0.35, 0.8, 0.5).norm())), 18) * 0.25;
 			return switch (material) {
-				case DARK -> rgb(0.26 + brushed, 0.28 + brushed, 0.31 + brushed);
+				case DARK -> rgb(0.26 + brushed + spec * 0.5, 0.28 + brushed + spec * 0.5, 0.31 + brushed + spec * 0.5);
+				case CHROME -> rgb(0.78 + spec, 0.8 + spec, 0.84 + spec);
 				case GLOW -> rgb(0.45, 1.0, 1.0);
-				case VISOR -> {
-					double shine = Math.pow(Math.max(0, n.dot(v(0.3, 0.8, 0.5).norm())), 10) * 0.35;
-					yield rgb(0.05 + shine, 0.07 + shine, 0.10 + shine);
-				}
+				case VISOR -> rgb(0.05, 0.07, 0.10);
 				case RED -> rgb(1.0, 0.25, 0.22);
 				case YELLOW -> rgb(1.0, 0.85, 0.25);
 				case GREEN -> rgb(0.35, 1.0, 0.35);
 				case TEETH -> rgb(0.85, 0.88, 0.9);
-				default -> rgb(0.64 + brushed - rim, 0.68 + brushed - rim, 0.72 + brushed - rim);
+				default -> rgb(0.64 + brushed - rim + spec, 0.68 + brushed - rim + spec, 0.72 + brushed - rim + spec);
 			};
 		}
 	}
 
 	// ================================================================== Frog
 
-	/** A cheerful upright frog with big eyes on top, a wide mouth with a tongue, a pale belly and webbed feet. */
+	/**
+	 * A cheerful upright frog with big eyes on top, a wide mouth with a tongue, warty spotted skin, ear discs behind the
+	 * eyes, a pale belly, muscular legs and webbed hands and feet with round toe pads.
+	 */
 	static final class Frog extends Design {
 		static final double MOUTH_Y = 1.235;
 		static final double MOUTH_FRONT_Z = 0.22;
@@ -703,11 +969,65 @@ public class CharacterModels {
 		static final V CAVITY_C = v(0, 1.238, 0.065);
 		static final V CAVITY_R = v(0.185, 0.034, 0.13);
 		static final V EYE_L = v(0.125, 1.405, 0.085);
-		static final int SKIN = 0, WHITE = 1, PUPIL = 2, MOUTH = 3, TONGUE = 4, PAD = 5;
+		static final int SKIN = 0, WHITE = 1, PUPIL = 2, MOUTH = 3, TONGUE = 4, PAD = 5, IRIS = 6, WEB = 7, LINE = 8;
+
+		/** The mouth: a clean line where the cut between head and jaw meets the skin, from corner to corner. */
+		static void addMouthLine(Mesh m) {
+			List<V> line = new ArrayList<>();
+			for (int i = 0; i <= 20; i++) {
+				double x = -0.2 + 0.4 * i / 20;
+				double z = 0.25;
+				V hit = null;
+				for (int k = 0; k < 3; k++) { // the cut slopes with z, so settle the height and depth together
+					double y = MOUTH_Y + (MOUTH_FRONT_Z - z) * CUT_SLOPE + 0.05 * sq(x / 0.22) + 0.003;
+					hit = hitSurface(Frog::skull, v(x, y, 0.4), v(0, 0, -1), 0.6);
+					if (hit == null) {
+						break;
+					}
+					z = hit.z;
+				}
+				if (hit != null) {
+					line.add(hit.add(v(0, 0, 0.002)));
+				}
+			}
+			double[] r = new double[line.size()];
+			for (int i = 0; i < r.length; i++) {
+				r[i] = 0.0055 * (0.6 + 0.4 * Math.sin(Math.PI * i / (r.length - 1)));
+			}
+			addTube(m, line, r, 6, false, LINE, LINE);
+		}
+
+		/** Thin webbing in the gap between two fingers or toes, from {@code base}, reaching {@code reach} of the way to the tips. */
+		static void addWeb(Mesh m, V base, V tipA, V tipB, double reach) {
+			V a = base.add(tipA.sub(base).mul(reach));
+			V b = base.add(tipB.sub(base).mul(reach));
+			V mid = a.add(b).mul(0.5);
+			V normal = a.sub(base).cross(b.sub(base)).norm();
+			V center = base.add(mid).mul(0.5).add(mid.sub(base).mul(0.15));
+			double length = mid.sub(base).len() * 0.62;
+			double width = a.sub(b).len() * 0.5;
+			V along = mid.sub(base).norm();
+			// The same in-plane axes addOrientedEllipsoid uses, so the long side can point from the base toward the tips.
+			V a0 = (Math.abs(normal.y) < 0.9 ? v(0, 1, 0) : v(0, 0, 1)).cross(normal).norm();
+			V b0 = normal.cross(a0);
+			double yaw = Math.atan2(along.dot(b0), along.dot(a0));
+			addOrientedEllipsoid(m, center, normal, yaw, v(length, 0.0035, width), WEB);
+		}
 
 		@Override
 		String name() {
 			return "Frog";
+		}
+
+		@Override
+		double bounce() {
+			return 0.06;
+		}
+
+		/** Warts on the back and the top of the head (not on the belly or the face). */
+		static double warts(V p) {
+			double bumps = Math.max(0, noise(p.mul(38)) - 0.35) / 0.65;
+			return 0.0055 * bumps * smoothstep(0.08, -0.02, p.z + 0.25 * Math.max(0, p.y - 1.2));
 		}
 
 		@Override
@@ -737,8 +1057,10 @@ public class CharacterModels {
 			d = smin(d, ellipsoid(p, v(0, 1.315, -0.01), v(0.215, 0.10, 0.18)), 0.06);
 			for (int s = -1; s <= 1; s += 2) {
 				d = smin(d, ellipsoid(p, EYE_L.withX(s * EYE_L.x).add(v(0, -0.01, -0.012)), v(0.078, 0.07, 0.072)), 0.05);
+				d = smax(d, -ellipsoid(p, v(s * 0.212, 1.3, -0.04), v(0.012, 0.03, 0.03)), 0.01); // ear discs, a little sunken
+				d = smax(d, -ellipsoid(p, v(s * 0.034, 1.322, 0.205), v(0.007, 0.005, 0.008)), 0.004); // nostrils
 			}
-			return d;
+			return d - warts(p);
 		}
 
 		static double cutPlane(V p) {
@@ -762,25 +1084,50 @@ public class CharacterModels {
 			// Top under the head. It slopes down toward the front, so the chest doesn't poke into the mouth when the
 			// jaw opens.
 			double top = 1.14 - 0.45 * Math.max(0, p.z);
-			return smax(d, p.y - top, 0.04);
+			return smax(d, p.y - top, 0.04) - warts(p);
 		}
+
+		/** A muscular frog leg: big thigh, knee, shin and ankle, bent like a frog's. */
+		static double legShape(V p, double s) {
+			V hip = v(s * 0.115, 0.62, 0.0);
+			V knee = v(s * 0.165, 0.40, 0.15);
+			V ankle = v(s * 0.13, 0.08, -0.02);
+			double d = ellipsoid(p, hip, v(0.10, 0.09, 0.085));
+			d = smin(d, roundCone(p, hip.add(v(0, 0, 0.02)), knee, 0.088, 0.056), 0.04);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(hip, knee, 0.45).add(v(s * 0.01, 0, -0.01)), v(0.08, 0.1, 0.075)), 0.05); // thigh muscle
+			d = smin(d, ellipsoid(p, knee.add(v(0, 0.005, 0.02)), v(0.05, 0.05, 0.045)), 0.03); // knee
+			d = smin(d, roundCone(p, knee, ankle, 0.054, 0.032), 0.035);
+			d = smin(d, ellipsoid(p, SkinnyAlien.between(knee, ankle, 0.35).add(v(0, 0, -0.02)), v(0.045, 0.085, 0.045)), 0.04); // calf
+			d = smin(d, SkinnyAlien.sphere(p, ankle, 0.034), 0.02);
+			return d - warts(p) * 0.6;
+		}
+
 
 		@Override
 		Map<String, Mesh> build() {
 			Map<String, Mesh> parts = new LinkedHashMap<>();
-			Mesh head = surfaceNets(p -> smax(smax(skull(p), -jawRegion(p), 0.01), -cavity(p), 0.01), v(-0.27, 1.12, -0.22), v(0.27, 1.50, 0.25), 0.019);
+			Mesh head = surfaceNormals(surfaceNets(p -> smax(smax(skull(p), -jawRegion(p), 0.01), -cavity(p), 0.01), v(-0.27, 1.12, -0.22),
+				v(0.27, 1.50, 0.25), 0.0115), Frog::skull, 0.004);
+			V[] eyes = new V[2];
 			for (int s = -1; s <= 1; s += 2) {
 				V eye = EYE_L.withX(s * EYE_L.x);
-				addEllipsoid(head, eye.add(v(0, 0.004, 0.01)), v(0.058, 0.056, 0.058), WHITE);
-				addEllipsoid(head, eye.add(v(s * 0.006, 0.006, 0.058)), v(0.012, 0.022, 0.026), PUPIL);
+				V ball = eye.add(v(0, 0.004, 0.01));
+				eyes[(s + 1) / 2] = ball;
+				addEllipsoid(head, ball, v(0.058, 0.056, 0.058), WHITE);
+				V look = v(s * 0.08, 0.05, 1);
+				addEllipsoidCap(head, ball, v(0.058, 0.056, 0.058), look, 30, 1.004, IRIS);
+				addEllipsoidCap(head, ball, v(0.058, 0.056, 0.058), look, 15, 1.008, PUPIL);
+				addEllipsoid(head, ball.add(v(s * 0.004 - 0.012, 0.022, 0.05)), v(0.007, 0.008, 0.004), WHITE);
 			}
+			addMouthLine(head);
 			parts.put("head", finish(head, this::paintHead));
 
-			Mesh jaw = surfaceNets(p -> smax(smax(skull(p), jawRegion(p), 0.01), -cavity(p), 0.01), v(-0.25, 1.12, -0.13), v(0.25, 1.30, 0.25), 0.016);
+			Mesh jaw = surfaceNormals(surfaceNets(p -> smax(smax(skull(p), jawRegion(p), 0.01), -cavity(p), 0.01), v(-0.25, 1.12, -0.13), v(0.25, 1.30, 0.25),
+				0.0118), Frog::skull, 0.004);
 			addEllipsoid(jaw, v(0, 1.212, 0.07), v(0.085, 0.016, 0.075), TONGUE);
 			parts.put("jaw", finish(jaw, this::paintHead));
 
-			parts.put("body", finish(surfaceNets(Frog::body, v(-0.24, 0.56, -0.20), v(0.24, 1.25, 0.21), 0.022), this::paintBody));
+			parts.put("body", finish(surfaceNets(Frog::body, v(-0.24, 0.56, -0.20), v(0.24, 1.25, 0.21), 0.0135), this::paintBody));
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
@@ -790,26 +1137,35 @@ public class CharacterModels {
 				addSphere(arm, v(s * 0.222, 0.86, 0.05), 0.03, SKIN);
 				addTube(arm, path(v(s * 0.222, 0.86, 0.05), v(s * 0.218, 0.78, 0.08), v(s * 0.212, 0.72, 0.105)), radii(0.03, 0.027, 0.024), 9, false, SKIN, SKIN);
 				addEllipsoid(arm, v(s * 0.212, 0.705, 0.115), v(0.035, 0.03, 0.03), SKIN);
+				V[] tips = new V[4];
 				for (int f = 0; f < 4; f++) {
 					double a = Math.toRadians(-50 + f * 33);
 					V tip = v(s * (0.212 + Math.sin(a) * 0.045), 0.645, 0.13 + Math.cos(a) * 0.035);
-					addTube(arm, path(v(s * 0.212, 0.70, 0.12), v(s * (0.212 + Math.sin(a) * 0.028), 0.672, 0.125 + Math.cos(a) * 0.02), tip), radii(0.011, 0.009, 0.008), 6, false, SKIN, SKIN);
+					V knuckle = v(s * (0.212 + Math.sin(a) * 0.028), 0.672, 0.125 + Math.cos(a) * 0.02);
+					addTube(arm, path(v(s * 0.212, 0.70, 0.12), knuckle, tip), radii(0.011, 0.009, 0.008), 7, false, SKIN, SKIN);
+					addSphere(arm, knuckle, 0.0105, SKIN);
 					addSphere(arm, tip, 0.014, PAD);
+					tips[f] = tip;
+				}
+				for (int f = 0; f < 3; f++) { // webbing between the fingers
+					addWeb(arm, v(s * 0.212, 0.69, 0.122), tips[f], tips[f + 1], 0.6);
 				}
 				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paintLimb));
 
-				Mesh leg = new Mesh();
-				addEllipsoid(leg, v(s * 0.115, 0.62, 0.0), v(0.10, 0.09, 0.085), SKIN);
-				addTube(leg, path(v(s * 0.115, 0.62, 0.02), v(s * 0.145, 0.50, 0.11), v(s * 0.165, 0.40, 0.15)), radii(0.088, 0.072, 0.058), 11, false, SKIN, SKIN);
-				addSphere(leg, v(s * 0.165, 0.40, 0.15), 0.058, SKIN);
-				addTube(leg, path(v(s * 0.165, 0.40, 0.15), v(s * 0.15, 0.24, 0.05), v(s * 0.13, 0.08, -0.02)), radii(0.056, 0.045, 0.034), 10, false, SKIN, SKIN);
-				addSphere(leg, v(s * 0.13, 0.07, -0.02), 0.032, SKIN);
-				addEllipsoid(leg, v(s * 0.135, 0.028, 0.06), v(0.11, 0.026, 0.07), SKIN);
-				for (int t = 0; t < 3; t++) {
-					double a = Math.toRadians(-30 + t * 30);
-					V tip = v(s * (0.135 + Math.sin(a) * 0.09), 0.018, 0.08 + Math.cos(a) * 0.12);
-					addTube(leg, path(v(s * 0.135, 0.03, 0.09), v(s * (0.135 + Math.sin(a) * 0.05), 0.022, 0.09 + Math.cos(a) * 0.07), tip), radii(0.016, 0.013, 0.011), 6, false, SKIN, SKIN);
-					addSphere(leg, tip, 0.02, PAD);
+				Mesh leg = surfaceNets(p -> legShape(p, s), v(s * 0.14 - 0.13, 0.03, -0.11), v(s * 0.14 + 0.13, 0.72, 0.22), 0.012);
+				addEllipsoid(leg, v(s * 0.135, 0.028, 0.06), v(0.075, 0.024, 0.065), SKIN);
+				V[] toes = new V[4];
+				for (int t = 0; t < 4; t++) {
+					double a = Math.toRadians(-36 + t * 24);
+					V tip = v(s * (0.135 + Math.sin(a) * 0.1), 0.016, 0.08 + Math.cos(a) * 0.13);
+					V knuckle = v(s * (0.135 + Math.sin(a) * 0.055), 0.022, 0.09 + Math.cos(a) * 0.075);
+					addTube(leg, path(v(s * 0.135, 0.03, 0.09), knuckle, tip), radii(0.015, 0.012, 0.01), 7, false, SKIN, SKIN);
+					addSphere(leg, knuckle, 0.0135, SKIN);
+					addSphere(leg, tip, 0.019, PAD);
+					toes[t] = tip;
+				}
+				for (int t = 0; t < 3; t++) { // webbing between the toes
+					addWeb(leg, v(s * 0.135, 0.026, 0.09), toes[t], toes[t + 1], 0.75);
 				}
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg, this::paintLimb));
 			}
@@ -821,6 +1177,7 @@ public class CharacterModels {
 				mad.append(eyelid(eye, v(0.058, 0.056, 0.058), s, 0.12, 30, 0.16), SKIN);
 			}
 			parts.put("mad_head", finish(mad, this::paintHead));
+			parts.put("blink_head", finish(blinkLids(eyes, v(0.058, 0.056, 0.058), 0.12), (p, n, m, e) -> green(p, n, 1)));
 
 			double s = -1;
 			Mesh finger = new Mesh();
@@ -848,6 +1205,8 @@ public class CharacterModels {
 			switch (material) {
 				case WHITE:
 					return rgb(0.96, 0.96, 0.93);
+				case IRIS:
+					return rgb(0.85, 0.66, 0.16);
 				case PUPIL:
 					return glossyBlack(n);
 				case TONGUE:
@@ -855,21 +1214,25 @@ public class CharacterModels {
 				default:
 					break;
 			}
-			boolean inside = skull(p) < -0.006 || cavity(p) < 0.008 || Math.abs(jawRegion(p)) < 0.008 && skull(p) < -0.002;
+			if (material == LINE) {
+				return rgb(0.12, 0.24, 0.08);
+			}
+			boolean inside = skull(p) < -0.008 || cavity(p) < 0.008 || Math.abs(jawRegion(p)) < 0.008 && skull(p) < -0.006;
 			if (inside) {
 				double back = clamp01((0.18 - p.z) / 0.25);
 				return rgb(0.78 - 0.35 * back, 0.30 - 0.15 * back, 0.36 - 0.15 * back);
 			}
-			if (Math.abs(cutPlane(p)) < 0.012 && p.z > 0.0) {
-				return rgb(0.16, 0.30, 0.10); // mouth line
-			}
 			double[] c = green(p, n, 1);
 			for (int s = -1; s <= 1; s += 2) {
+				double ear = p.sub(v(s * 0.212, 1.3, -0.04)).len();
+				if (ear < 0.034) { // the ear disc: a darker ring around a lighter middle
+					c = mix(c, ear < 0.024 ? rgb(0.52, 0.62, 0.3) : rgb(0.18, 0.32, 0.1), 0.85);
+				}
 				double blush = 1 - smoothstep(0.0, 0.05, p.sub(v(s * 0.175, 1.255, 0.14)).len());
 				c = mix(c, rgb(0.92, 0.55, 0.58), blush * 0.85);
-				double nostril = p.sub(v(s * 0.035, 1.32, 0.205)).len();
-				if (nostril < 0.012) {
-					c = mix(c, rgb(0.1, 0.18, 0.06), 1 - nostril / 0.012);
+				double nostril = p.sub(v(s * 0.034, 1.322, 0.205)).len();
+				if (nostril < 0.008) {
+					c = mix(c, rgb(0.1, 0.18, 0.06), 1 - nostril / 0.008);
 				}
 			}
 			if (p.y < MOUTH_Y + 0.01 && p.z > 0.05) { // light chin
@@ -888,6 +1251,9 @@ public class CharacterModels {
 			if (material == PAD) {
 				return rgb(0.80, 0.86, 0.55);
 			}
+			if (material == WEB) {
+				return rgb(0.45, 0.7, 0.32);
+			}
 			return green(p, n, 1);
 		}
 	}
@@ -895,14 +1261,17 @@ public class CharacterModels {
 	// ================================================================== Burger
 
 	/**
-	 * A burger with arms and legs: bottom bun, patty, cheese, lettuce, tomato and a sesame top bun with big eyes.
-	 * The top bun is the "jaw": it lifts open (upward) while he talks, showing teeth and a tongue.
+	 * A burger with arms and legs: bottom bun, a charred patty, dripping cheese, pickles, frilly lettuce, tomato slices and
+	 * a shiny sesame top bun with big eyes. The top bun is the "jaw": it lifts open (upward) while he talks, showing teeth
+	 * and a tongue.
 	 */
 	static final class Burger extends Design {
 		static final double TOP_BASE_Y = 0.905;
 		static final V HINGE = v(0, TOP_BASE_Y, -0.36);
 		static final int BUN = 0, BUN_INSIDE = 1, PATTY = 2, CHEESE = 3, LETTUCE = 4, TOMATO = 5, SEED = 6, WHITE = 7, PUPIL = 8,
-			BROW = 9, TEETH = 10, TONGUE = 11, LIMB = 12, GLOVE = 13, SHOE = 14, SOLE = 15;
+			BROW = 9, TEETH = 10, TONGUE = 11, LIMB = 12, GLOVE = 13, SHOE = 14, SOLE = 15, PICKLE = 16, LACE = 17;
+		static final double[][] TOMATOES = {{-0.22, 0.17}, {0.21, 0.19}, {0.02, -0.25}};
+		static final double[][] PICKLES = {{-0.31, -0.12}, {0.3, -0.08}, {0.0, 0.33}};
 
 		@Override
 		String name() {
@@ -912,6 +1281,11 @@ public class CharacterModels {
 		@Override
 		double height() {
 			return 1.35;
+		}
+
+		@Override
+		double bounce() {
+			return 0.05;
 		}
 
 		@Override
@@ -949,14 +1323,28 @@ public class CharacterModels {
 			V q = rotY(p, Math.toRadians(45));
 			double r = Math.max(Math.abs(q.x), Math.abs(q.z));
 			double droop = 0.6 * sq(Math.max(0, r - 0.30));
-			return roundBox(q.add(v(0, droop, 0)), v(0, 0.835, 0), v(0.40, 0.013, 0.40), 0.008);
+			double d = roundBox(q.add(v(0, droop, 0)), v(0, 0.835, 0), v(0.40, 0.013, 0.40), 0.008);
+			for (int k = 0; k < 4; k++) { // melted drips hanging from the corners
+				double a = Math.toRadians(90 * k);
+				V corner = v(Math.sin(a) * 0.53, 0.795, Math.cos(a) * 0.53);
+				d = smin(d, roundCone(p, corner, corner.add(v(0, -0.05 - 0.012 * k, 0)), 0.024, 0.013), 0.02);
+			}
+			return d;
+		}
+
+		static double pickles(V p) {
+			double d = 1e9;
+			for (double[] c : PICKLES) {
+				d = Math.min(d, roundCylinderY(p, v(c[0], 0.849, c[1]), 0.075, 0.006, 0.005));
+			}
+			return d;
 		}
 
 		static double lettuce(V p) {
 			double angle = Math.atan2(p.z, p.x);
 			double radial = Math.sqrt(p.x * p.x + p.z * p.z);
-			double wave = Math.sin(angle * 13) * 0.012 * smoothstep(0.3, 0.45, radial);
-			double edge = 0.445 + Math.sin(angle * 9 + 1) * 0.015;
+			double wave = (Math.sin(angle * 19) * 0.012 + Math.sin(angle * 7 + 2) * 0.006) * smoothstep(0.3, 0.45, radial);
+			double edge = 0.45 + Math.sin(angle * 9 + 1) * 0.016 + Math.sin(angle * 23) * 0.006;
 			V q = v(p.x, p.y - wave, p.z);
 			double flat = Math.max(Math.abs(q.y - 0.860) - 0.012, radial - edge);
 			return flat - 0.004;
@@ -964,21 +1352,20 @@ public class CharacterModels {
 
 		static double tomato(V p) {
 			double d = 1e9;
-			double[][] slices = {{-0.22, 0.17}, {0.21, 0.19}, {0.02, -0.25}};
-			for (double[] s : slices) {
+			for (double[] s : TOMATOES) {
 				d = Math.min(d, roundCylinderY(p, v(s[0], 0.876, s[1]), 0.15, 0.012, 0.008));
 			}
 			return d;
 		}
 
 		static double stack(V p) {
-			return Math.min(Math.min(Math.min(bottomBun(p), patty(p)), Math.min(cheese(p), lettuce(p))), tomato(p));
+			return Math.min(Math.min(Math.min(bottomBun(p), patty(p)), Math.min(cheese(p), lettuce(p))), Math.min(tomato(p), pickles(p)));
 		}
 
 		/** Which layer of the stack a point belongs to. */
 		static int layerAt(V p) {
-			double[] d = {bottomBun(p), patty(p), cheese(p), lettuce(p), tomato(p)};
-			int[] layers = {BUN, PATTY, CHEESE, LETTUCE, TOMATO};
+			double[] d = {bottomBun(p), patty(p), cheese(p), lettuce(p), tomato(p), pickles(p)};
+			int[] layers = {BUN, PATTY, CHEESE, LETTUCE, TOMATO, PICKLE};
 			int best = 0;
 			for (int i = 1; i < d.length; i++) {
 				if (d[i] < d[best]) {
@@ -998,13 +1385,13 @@ public class CharacterModels {
 			Map<String, Mesh> parts = new LinkedHashMap<>();
 
 			// Body: everything below the top bun, as one surface (no hidden faces between the layers).
-			Mesh body = surfaceNets(Burger::stack, v(-0.58, 0.58, -0.58), v(0.58, 0.91, 0.58), 0.025);
+			Mesh body = surfaceNets(Burger::stack, v(-0.58, 0.58, -0.58), v(0.58, 0.91, 0.58), 0.0158);
 			addEllipsoid(body, v(0, 0.884, 0.20), v(0.11, 0.012, 0.09), TONGUE);
 			parts.put("body", finish(body, (p, n, m, e) -> paint(p, n, m == TONGUE ? TONGUE : layerAt(p), e)));
 
 			// Jaw: the top bun with eyes, eyebrows, seeds and teeth.
 			Mesh top = new Mesh();
-			top.append(surfaceNets(Burger::topBun, v(-0.44, TOP_BASE_Y - 0.03, -0.44), v(0.44, 1.26, 0.44), 0.029), BUN);
+			top.append(surfaceNets(Burger::topBun, v(-0.44, TOP_BASE_Y - 0.03, -0.44), v(0.44, 1.26, 0.44), 0.0185), BUN);
 			Mesh calm = new Mesh();
 			Mesh mad = new Mesh();
 			for (int s = -1; s <= 1; s += 2) {
@@ -1027,25 +1414,37 @@ public class CharacterModels {
 			}
 			parts.put("jaw", finish(top, this::paint));
 			parts.put("calm_jaw", finish(calm, this::paint));
+			V[] eyes = {v(-0.115, 1.07, 0.325), v(0.115, 1.07, 0.325)};
+			parts.put("blink_jaw", finish(blinkLids(eyes, v(0.05, 0.088, 0.075), 0.1), (p, n, m, e) -> lidColor(n)));
 			parts.put("mad_jaw", finish(mad, (p, n, m, e) -> m == BUN ? lidColor(n) : paint(p, n, m, e)));
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
 				Mesh arm = new Mesh();
-				addTube(arm, path(v(s * 0.40, 0.785, 0), v(s * 0.49, 0.66, 0.03), v(s * 0.525, 0.50, 0.075)), radii(0.026, 0.024, 0.022), 8, false, LIMB, LIMB);
+				addTube(arm, path(v(s * 0.40, 0.785, 0), v(s * 0.49, 0.66, 0.03), v(s * 0.525, 0.50, 0.075)), radii(0.026, 0.024, 0.022), 9, false, LIMB, LIMB);
+				addSphere(arm, v(s * 0.474, 0.672, 0.025), 0.029, LIMB); // elbow
 				addTorusY(arm, v(s * 0.527, 0.50, 0.078), 0.034, 0.012, GLOVE); // cuff
+				addTorusY(arm, v(s * 0.527, 0.485, 0.08), 0.031, 0.008, GLOVE);
 				V palm = v(s * 0.53, 0.445, 0.095);
 				addEllipsoid(arm, palm, v(0.035, 0.05, 0.045), GLOVE);
 				for (int f = 0; f < 3; f++) {
 					double z = 0.095 + (f - 1) * 0.024;
-					addTube(arm, path(v(s * 0.53, 0.42, z), v(s * 0.535, 0.39, z + 0.008), v(s * 0.53, 0.37, z + 0.012)), radii(0.015, 0.014, 0.013), 7, false, GLOVE, GLOVE);
+					addTube(arm, path(v(s * 0.53, 0.42, z), v(s * 0.535, 0.39, z + 0.008), v(s * 0.53, 0.37, z + 0.012)), radii(0.015, 0.014, 0.013), 8, false, GLOVE, GLOVE);
+					addSphere(arm, v(s * 0.535, 0.393, z + 0.008), 0.0155, GLOVE); // knuckle
 				}
 				addTube(arm, path(v(s * 0.49, 0.45, 0.115), v(s * 0.475, 0.43, 0.13), v(s * 0.465, 0.415, 0.135)), radii(0.014, 0.013, 0.012), 7, false, GLOVE, GLOVE);
 				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paint));
 
 				Mesh leg = new Mesh();
 				addTube(leg, path(v(s * 0.12, 0.62, 0), v(s * 0.13, 0.36, 0.02), v(s * 0.125, 0.11, 0.0)), radii(0.028, 0.026, 0.024), 8, false, LIMB, LIMB);
-				leg.append(surfaceNets(p -> shoe(p, s), v(s * 0.125 - 0.10, -0.01, -0.12), v(s * 0.125 + 0.10, 0.17, 0.22), 0.019), SHOE);
+				leg.append(surfaceNets(p -> shoe(p, s), v(s * 0.125 - 0.10, -0.01, -0.12), v(s * 0.125 + 0.10, 0.17, 0.22), 0.0125), SHOE);
+				addSphere(leg, v(s * 0.13, 0.36, 0.02), 0.03, LIMB); // knee
+				for (int k = 0; k < 3; k++) { // laces
+					double z = 0.07 + k * 0.03;
+					double y = 0.118 - k * 0.012;
+					addTube(leg, path(v(s * 0.125 - 0.032, y, z), v(s * 0.125, y + 0.006, z + 0.004), v(s * 0.125 + 0.032, y, z)), radii(0.004, 0.004, 0.004), 5, false,
+						LACE, LACE);
+				}
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg, this::paint));
 			}
 
@@ -1074,7 +1473,7 @@ public class CharacterModels {
 		static void addSeeds(Mesh m) {
 			java.util.Random rnd = new java.util.Random(5);
 			int placed = 0;
-			while (placed < 34) {
+			while (placed < 58) {
 				double a = rnd.nextDouble() * Math.PI * 2;
 				double r = Math.sqrt(rnd.nextDouble()) * 0.36;
 				double x = Math.cos(a) * r;
@@ -1103,7 +1502,8 @@ public class CharacterModels {
 						return rgb(0.97 + grain, 0.86 + grain, 0.62 + grain); // cut side
 					}
 					double toast = smoothstep(0.0, 1.0, Math.max(0, n.y)) * 0.12;
-					return rgb(0.86 - toast + grain, 0.52 - toast * 1.2 + grain, 0.18 - toast * 0.6 + grain * 0.5);
+					double shine = Math.pow(Math.max(0, n.dot(v(0.3, 0.85, 0.45).norm())), 16) * 0.3;
+					return rgb(0.86 - toast + grain + shine, 0.52 - toast * 1.2 + grain + shine, 0.18 - toast * 0.6 + grain * 0.5 + shine * 0.7);
 				}
 				case PATTY: {
 					double grill = 0.5 + 0.5 * Math.sin((p.x + p.z) * 60);
@@ -1116,8 +1516,26 @@ public class CharacterModels {
 					double vein = Math.pow(Math.abs(Math.sin(Math.atan2(p.z, p.x) * 13)), 8) * 0.12;
 					return rgb(0.40 + vein, 0.76 + grain + vein, 0.24 + vein);
 				}
-				case TOMATO:
-					return rgb(0.88, 0.16 + grain, 0.12);
+				case TOMATO: {
+					// slices: a darker skin edge, lighter flesh, and seeds in a ring
+					double ring = 1e9;
+					for (double[] c : TOMATOES) {
+						ring = Math.min(ring, Math.sqrt(sq(p.x - c[0]) + sq(p.z - c[1])));
+					}
+					if (ring > 0.135) {
+						return rgb(0.72, 0.1, 0.08);
+					}
+					if (Math.abs(ring - 0.08) < 0.012 && noise(p.mul(160)) > 0.1) {
+						return rgb(0.98, 0.82, 0.45);
+					}
+					return rgb(0.9 + grain, 0.2 + grain, 0.14);
+				}
+				case PICKLE: {
+					double ridge = 0.5 + 0.5 * Math.sin(Math.atan2(p.z, p.x) * 40);
+					return rgb(0.42 + 0.08 * ridge, 0.58 + 0.08 * ridge, 0.16);
+				}
+				case LACE:
+					return rgb(0.97, 0.97, 0.97);
 				case SEED:
 					return rgb(0.99, 0.95, 0.80);
 				case WHITE:
@@ -1178,6 +1596,11 @@ public class CharacterModels {
 		@Override
 		double waddle() {
 			return 8;
+		}
+
+		@Override
+		double bounce() {
+			return 0.02;
 		}
 
 		@Override
@@ -1320,6 +1743,7 @@ public class CharacterModels {
 			}
 			parts.put("calm_head", finish(calm, this::paint));
 			parts.put("mad_head", finish(mad, this::paint));
+			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, EYE_R, 0.13), (p, n, m, e) -> paint(p, n, BLACK, e)));
 
 			double s = -1;
 			Mesh finger = surfaceNets(p -> flipper(p, s, true), v(s * 0.27 - 0.12, 0.43, -0.12), v(s * 0.27 + 0.12, 1.11, 0.13), 0.0085);
@@ -1469,6 +1893,11 @@ public class CharacterModels {
 		@Override
 		double headTurn() {
 			return 0.3;
+		}
+
+		@Override
+		double bounce() {
+			return 0.05;
 		}
 
 		@Override
@@ -1683,6 +2112,7 @@ public class CharacterModels {
 					radii(0.014, 0.017, 0.013), 8, false, BROW, BROW);
 			}
 			parts.put("mad_head", finish(mad, this::paintHead));
+			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, EYE_R, 0.08), (p, n, m, e) -> paintHead(p, n, SPONGE, e)));
 			parts.put("middle_finger", finish(arm(-1, true), this::paintBody));
 			return parts;
 		}
@@ -1837,6 +2267,11 @@ public class CharacterModels {
 		@Override
 		double headTurn() {
 			return 0.75;
+		}
+
+		@Override
+		double bounce() {
+			return 0.025;
 		}
 
 		@Override
@@ -2173,6 +2608,8 @@ public class CharacterModels {
 				addEllipsoid(mad, EYE.withX(s * EYE.x).add(v(0, 0, 0.004)), v(0.0175, 0.0135, 0.0125), GLOW);
 			}
 			parts.put("mad_head", finish(mad, (p, n, m, e) -> m == GLOW ? rgb(1.0, 0.18, 0.08) : paint(p, n, m, e, "head")));
+			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, v(0.018, 0.0145, 0.013), 0.12),
+				(p, n, m, e) -> paint(p, n, SKIN, e, "blink")));
 			parts.put("middle_finger", finish(armMesh(-1, true), (p, n, m, e) -> paint(p, n, m, e, "arm")));
 			return parts;
 		}
@@ -2347,6 +2784,11 @@ public class CharacterModels {
 		}
 
 		@Override
+		double bounce() {
+			return 0.05;
+		}
+
+		@Override
 		V iconEye() {
 			return v(0.0, 0.88, 1.35);
 		}
@@ -2401,6 +2843,7 @@ public class CharacterModels {
 					0.005, RIM, RIM);
 			}
 			parts.put("mad_head", finish(mad, this::paint));
+			parts.put("blink_head", finish(blinkLids(new V[] {SIX_EYE, SEVEN_EYE}, EYE_R, 0.2), (p, n, m, e) -> paint(p, n, BRICK, e)));
 			parts.put("middle_finger", finish(arm(-1, true), this::paint));
 			return parts;
 		}
@@ -3175,6 +3618,9 @@ public class CharacterModels {
 		if (design.smoke() != null) {
 			extra.append("\t\"smoke\": ").append(arr(design.smoke())).append(",\n");
 		}
+		if (design.bounce() != 0) {
+			extra.append("\t\"bounce\": ").append(fmt(design.bounce())).append(",\n");
+		}
 		String json = """
 			{
 				"name": "%s",
@@ -3251,7 +3697,13 @@ public class CharacterModels {
 		ImageIO.write(render(design, parts, design.iconFov(), eye34, face, 500, 500, true, 0, false), "png", dir.resolve(n + "-face-closed.png").toFile());
 		ImageIO.write(render(design, parts, design.iconFov(), eye34, face, 500, 500, true, jaw, false), "png", dir.resolve(n + "-face-open.png").toFile());
 		ImageIO.write(render(design, parts, design.iconFov(), eye34, face, 500, 500, true, 0, true), "png", dir.resolve(n + "-face-mad.png").toFile());
+		blinkPreview = true;
+		ImageIO.write(render(design, parts, design.iconFov(), eye34, face, 500, 500, true, 0, false), "png", dir.resolve(n + "-face-blink.png").toFile());
+		blinkPreview = false;
 	}
+
+	/** While drawing the blink preview: draw the closed eyelids. */
+	static boolean blinkPreview;
 
 	/** Small software rasterizer with two directional lights, roughly like Minecraft's entity lighting. */
 	static BufferedImage render(Design design, Map<String, Mesh> parts, double fovScale, V eye, V target, int w, int h, boolean background, double jawDegrees,
@@ -3277,7 +3729,8 @@ public class CharacterModels {
 		V shoulder = design.rig().rightArm();
 		for (Map.Entry<String, Mesh> entry : parts.entrySet()) {
 			String name = entry.getKey();
-			if (emote ? name.equals("right_arm") || isCalmPart(name) : isEmotePart(name)) {
+			boolean blinkPart = name.startsWith("blink_");
+			if (blinkPart ? !blinkPreview : emote ? name.equals("right_arm") || isCalmPart(name) : isEmotePart(name)) {
 				continue;
 			}
 			Mesh m = entry.getValue();

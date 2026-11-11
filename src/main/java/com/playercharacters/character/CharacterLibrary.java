@@ -73,34 +73,64 @@ public final class CharacterLibrary {
 			"Frog.png", "1c35f4608a6d53a3543d3697ea4e2ccb06341bca0cfbeaf2aa3db4fec9ef8979",
 			"Frog.json", "8bb9b34a81b6e0ef6d0c99684c19e28f3f67d67069bed01c0f1d93bbcc3aaa35"));
 		// Versions 2 and 3 (version 4 added the angry faces and middle fingers).
-		OUTDATED.put("Alien/model.obj", Set.of("766b2cf98270f83448615a0797d88517bb7c3f8da8b60b8b8598e9a06fad711d",
-			"47cf348d5186e5aff86e8f73cc54829934f45617b326e8591de343501b466897"));
-		OUTDATED.put("Alien/character.json", Set.of("3fea26c095af1f961822a9452acd2629e6a15f8901574d41e680f38d099fe879",
-			"bb464f8eee7d1245229b222a61b6bae1491c5cece7dc4b4d5106c15751adfd1c"));
-		OUTDATED.put("Alien/icon.png", Set.of("e32bbc58b8f7ec558d785b703e144add66e85e3f26ebda6fe8b7fc39a79bff6b",
-			"23b0481b472af8e5d35b4af5a351c83dca0bcb099f9c414741913c6330182c32"));
-		OUTDATED.put("Burger/model.obj", Set.of("a09753c907c2239b1c7d8f003dc6e8573e8e734391aaa995b346567ad55852ad"));
-		OUTDATED.put("Burger/character.json", Set.of("1f4780eb0b6fd163ea909dbe6cee7e5ee254168d19e5011d14f74d56e3232994"));
-		OUTDATED.put("Burger/icon.png", Set.of("a6a9e7b13ddaeacd432931aab27f489f6f971af0e70e7bf27d34d864c206f26f"));
-		OUTDATED.put("Frog/model.obj", Set.of("76c7eb1cc19b849eac0c8526073f493e5a98d5d45a7aa31c40fc151e276b1d4a"));
-		OUTDATED.put("Frog/character.json", Set.of("fee98f11449c4e4cf878302f911db60be3fca332c8387833fa39081908bfd234"));
-		OUTDATED.put("Frog/icon.png", Set.of("62ab7cb7dc0b05b92519d7306bfbbd2d71808bd4c186c5c961e5a9dddda441d9"));
-		OUTDATED.put("Robot/model.obj", Set.of("5a9c2c6bce5962d45836631cfab7843f0b66983407325c4352abba8758d37fe9"));
-		OUTDATED.put("Robot/character.json", Set.of("cc78b6c6fc309b0b00fdbae8a28636bc652b7c309ff8e3836e73637968fb306a"));
-		OUTDATED.put("Robot/icon.png", Set.of("4cc653f27f0fda1db3481422c5db3b5f27ebf5e4f398ddfb3911578eb4a66c62"));
+		outdated("Alien/model.obj", "766b2cf98270f83448615a0797d88517bb7c3f8da8b60b8b8598e9a06fad711d",
+			"47cf348d5186e5aff86e8f73cc54829934f45617b326e8591de343501b466897");
+		outdated("Alien/character.json", "3fea26c095af1f961822a9452acd2629e6a15f8901574d41e680f38d099fe879",
+			"bb464f8eee7d1245229b222a61b6bae1491c5cece7dc4b4d5106c15751adfd1c");
+		outdated("Alien/icon.png", "e32bbc58b8f7ec558d785b703e144add66e85e3f26ebda6fe8b7fc39a79bff6b",
+			"23b0481b472af8e5d35b4af5a351c83dca0bcb099f9c414741913c6330182c32");
+		outdated("Burger/model.obj", "a09753c907c2239b1c7d8f003dc6e8573e8e734391aaa995b346567ad55852ad");
+		outdated("Burger/character.json", "1f4780eb0b6fd163ea909dbe6cee7e5ee254168d19e5011d14f74d56e3232994");
+		outdated("Burger/icon.png", "a6a9e7b13ddaeacd432931aab27f489f6f971af0e70e7bf27d34d864c206f26f");
+		outdated("Frog/model.obj", "76c7eb1cc19b849eac0c8526073f493e5a98d5d45a7aa31c40fc151e276b1d4a");
+		outdated("Frog/character.json", "fee98f11449c4e4cf878302f911db60be3fca332c8387833fa39081908bfd234");
+		outdated("Frog/icon.png", "62ab7cb7dc0b05b92519d7306bfbbd2d71808bd4c186c5c961e5a9dddda441d9");
+		outdated("Robot/model.obj", "5a9c2c6bce5962d45836631cfab7843f0b66983407325c4352abba8758d37fe9");
+		outdated("Robot/character.json", "cc78b6c6fc309b0b00fdbae8a28636bc652b7c309ff8e3836e73637968fb306a");
+		outdated("Robot/icon.png", "4cc653f27f0fda1db3481422c5db3b5f27ebf5e4f398ddfb3911578eb4a66c62");
 		// Version 4 (version 5 turned Blue into 67 and remade the penguin, SpongeBob and the skinny alien).
-		OUTDATED.put("Blue/model.obj", Set.of("e5ca568036e84bb2a75123c740b32a42409496745300f16308eb63097f864c16"));
-		OUTDATED.put("Blue/character.json", Set.of("958ed595990e0bd011a5a0efef780c669694cd4e61788ecb8cde56d1f96a4bb3"));
-		OUTDATED.put("Blue/icon.png", Set.of("6597777a9e1ac2f926b8b3be5b0e9ba715b0a775ffd19be12d66e42598c88034"));
-		OUTDATED.put("Penguin/model.obj", Set.of("e70f0a2279b9c00a0d59f4a7a2f96cedb3948c184bb4773e352f98d60e5b4d87"));
-		OUTDATED.put("Penguin/character.json", Set.of("30ca3ddc01601dfc7377d18e07fbf1922b787f9235a2203bec9f6b647463fefd"));
-		OUTDATED.put("Penguin/icon.png", Set.of("b09bef1d6d1cb4bbeae00366ab62c55658d0b5107732ae171b9fbb0db70c8d04"));
-		OUTDATED.put("SpongeBob/model.obj", Set.of("1122acd0920f402064e6fc85508c0a9bb9d3e14f6beadae915564e23876e1e16"));
-		OUTDATED.put("SpongeBob/character.json", Set.of("bbbc39fd75cc99ab38f99da0aa2f68bde632200e2df0834e4d66eaf8ab2cdebf"));
-		OUTDATED.put("SpongeBob/icon.png", Set.of("10ae4ab121fa2f604baaab591c216fd3343ab38f81879f4223bb5d65edbe10d0"));
-		OUTDATED.put("Skinny Alien/model.obj", Set.of("6d2cca091e4c6a356ae54dd29af9d5e32ac73241326ce22d96d634ba377d55bd"));
-		OUTDATED.put("Skinny Alien/character.json", Set.of("def4b367e54a432310b0646e8d92cc6cd84c71588b2812c11b9413f7c01b3e04"));
-		OUTDATED.put("Skinny Alien/icon.png", Set.of("be0d58f969c9b1606511fee68c3a75f779a939d8551609cf30ac875ba12e0403"));
+		outdated("Blue/model.obj", "e5ca568036e84bb2a75123c740b32a42409496745300f16308eb63097f864c16");
+		outdated("Blue/character.json", "958ed595990e0bd011a5a0efef780c669694cd4e61788ecb8cde56d1f96a4bb3");
+		outdated("Blue/icon.png", "6597777a9e1ac2f926b8b3be5b0e9ba715b0a775ffd19be12d66e42598c88034");
+		outdated("Penguin/model.obj", "e70f0a2279b9c00a0d59f4a7a2f96cedb3948c184bb4773e352f98d60e5b4d87");
+		outdated("Penguin/character.json", "30ca3ddc01601dfc7377d18e07fbf1922b787f9235a2203bec9f6b647463fefd");
+		outdated("Penguin/icon.png", "b09bef1d6d1cb4bbeae00366ab62c55658d0b5107732ae171b9fbb0db70c8d04");
+		outdated("SpongeBob/model.obj", "1122acd0920f402064e6fc85508c0a9bb9d3e14f6beadae915564e23876e1e16");
+		outdated("SpongeBob/character.json", "bbbc39fd75cc99ab38f99da0aa2f68bde632200e2df0834e4d66eaf8ab2cdebf");
+		outdated("SpongeBob/icon.png", "10ae4ab121fa2f604baaab591c216fd3343ab38f81879f4223bb5d65edbe10d0");
+		outdated("Skinny Alien/model.obj", "6d2cca091e4c6a356ae54dd29af9d5e32ac73241326ce22d96d634ba377d55bd");
+		outdated("Skinny Alien/character.json", "def4b367e54a432310b0646e8d92cc6cd84c71588b2812c11b9413f7c01b3e04");
+		outdated("Skinny Alien/icon.png", "be0d58f969c9b1606511fee68c3a75f779a939d8551609cf30ac875ba12e0403");
+		// Version 5 (version 6 made all of them more detailed, and added blinking).
+		outdated("Alien/model.obj", "f63935eb7a0dbe3732b674207e0d95953255c01125d3e90d7f2104d616f8436a");
+		outdated("Alien/character.json", "bb464f8eee7d1245229b222a61b6bae1491c5cece7dc4b4d5106c15751adfd1c");
+		outdated("Alien/icon.png", "23b0481b472af8e5d35b4af5a351c83dca0bcb099f9c414741913c6330182c32");
+		outdated("Robot/model.obj", "ecdf980d4c43e168e38814cdec215ad9b9aa1fd318149bed5682f699f57421b0");
+		outdated("Robot/character.json", "cc78b6c6fc309b0b00fdbae8a28636bc652b7c309ff8e3836e73637968fb306a");
+		outdated("Robot/icon.png", "4cc653f27f0fda1db3481422c5db3b5f27ebf5e4f398ddfb3911578eb4a66c62");
+		outdated("Frog/model.obj", "5f4efadf41267c85f58daedfb5754987aebe01549f6e12fc32c8a546a956fb4c");
+		outdated("Frog/character.json", "fee98f11449c4e4cf878302f911db60be3fca332c8387833fa39081908bfd234");
+		outdated("Frog/icon.png", "c0e7431c17d44009765c5e2766eaf04e2ea89f986958d678db4d2890c895432c");
+		outdated("Burger/model.obj", "f184e839ada2a9eba722e9785cfc1471d940f0048b0a5a0811171a0be2f3d058");
+		outdated("Burger/character.json", "1f4780eb0b6fd163ea909dbe6cee7e5ee254168d19e5011d14f74d56e3232994");
+		outdated("Burger/icon.png", "a6a9e7b13ddaeacd432931aab27f489f6f971af0e70e7bf27d34d864c206f26f");
+		outdated("Penguin/model.obj", "4f6451a65341303effe3cef51bc0b1e89b9e104981cfddd88d2e2d7e1e397a07");
+		outdated("Penguin/character.json", "d51ddb6f7db4ff4de8fcba929eafee68ce59c52ff0f863c0bd2ddcb68f3a16b1");
+		outdated("Penguin/icon.png", "1f7b48f873d94292c5fa1ff950128c301cd9cf3ae9da4b402f892835f5367750");
+		outdated("SpongeBob/model.obj", "11cb7611c98441ea24baa823a74e27667c7f919e2e48d165340d2864f3fe535b");
+		outdated("SpongeBob/character.json", "bbbc39fd75cc99ab38f99da0aa2f68bde632200e2df0834e4d66eaf8ab2cdebf");
+		outdated("SpongeBob/icon.png", "bfc7c831fb542532941b7e98d5d969f3b74c35527878f80aa7714a7948848d92");
+		outdated("Skinny Alien/model.obj", "5ce1b55fdd45b0a0fb2b3e7f746c2cb4e94ba829d3e5d86092253ae335b68386");
+		outdated("Skinny Alien/character.json", "def4b367e54a432310b0646e8d92cc6cd84c71588b2812c11b9413f7c01b3e04");
+		outdated("Skinny Alien/icon.png", "d76025b59e1951247c0a9877330f49bd7794326e8dcd7190df16974330f4f97c");
+		outdated("Blue/model.obj", "041d6f6535c053f316d74a505e5432a2cbb637cae7406be04361e3721c549ab8");
+		outdated("Blue/character.json", "4540a938f01b735d301cb4f75435dca4aee82afa62276c5c0773b01ece7d5490");
+		outdated("Blue/icon.png", "ccc95bae24efe84bd3bf053e03d6c8408bfd6ce6e6cfc44cd20777e6f7ddba78");
+	}
+
+	/** Remembers SHA-256 hashes of older versions of an example file. */
+	private static void outdated(String file, String... hashes) {
+		OUTDATED.computeIfAbsent(file, key -> new HashSet<>()).addAll(List.of(hashes));
 	}
 
 	private static List<String> modelFiles(String folder) {

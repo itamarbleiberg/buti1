@@ -90,7 +90,8 @@ public final class FartEffects {
 		return fart == null ? 0.0F : bendAt((fart.age + partialTick) / 20.0F);
 	}
 
-	static float bendAt(float t) {
+	/** How far a fart bends a player over {@code t} seconds after it started. */
+	public static float bendAt(float t) {
 		if (t <= 0.0F || t >= DURATION) {
 			return 0.0F;
 		}

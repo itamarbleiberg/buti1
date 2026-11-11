@@ -5,6 +5,11 @@ import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.effects.FartEffects;
 import com.playercharacters.effects.MiddleFingerEmote;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.playercharacters.emote.Emote;
+import com.playercharacters.emote.EmotePlayer;
+import com.playercharacters.emote.EmotePose;
+import com.playercharacters.emote.Emotes;
+import com.playercharacters.render.CharacterPoses;
 import com.playercharacters.render.CharacterRenderState;
 import com.playercharacters.render.FirstPersonHands;
 import com.playercharacters.render.JawAnimator;
@@ -37,13 +42,35 @@ public abstract class AvatarRendererMixin {
 			UUID id = player.getUUID();
 			PlayerCharacter character = CharacterResolver.characterFor(id);
 			characterState.playercharacters$setCharacter(character);
-			characterState.playercharacters$setJaw(character != null && character.isModel() ? JawAnimator.jawFor(id) : 0.0F);
-			characterState.playercharacters$setFart(FartEffects.bend(id, partialTick));
+			EmotePose emote = EmotePlayer.pose(id, partialTick);
+			characterState.playercharacters$setEmote(emote);
+			float jaw = character != null && character.isModel() ? JawAnimator.jawFor(id) : 0.0F;
+			if (emote != null && character != null && character.isModel()) {
+				jaw = Math.max(jaw, emote.jaw * emote.weight); // laughing, shouting, "six seven"...
+			}
+			characterState.playercharacters$setJaw(jaw);
+			float fart = FartEffects.bend(id, partialTick);
 			float raise = MiddleFingerEmote.raise(id, partialTick);
+			boolean mad = MiddleFingerEmote.isMad(id) || emote != null && emote.mad && emote.weight > 0.5F;
+			// The emote wheel shows the fart and the middle finger too.
+			Emote previewed = EmotePlayer.previewEmote(id);
+			if (previewed == Emotes.FART) {
+				fart = FartEffects.bendAt(EmotePlayer.previewSeconds() % 1.8F);
+			} else if (previewed == Emotes.MIDDLE_FINGER) {
+				float t = EmotePlayer.previewSeconds();
+				raise = Math.min(1.0F, t / 0.25F) * (1.0F - Math.max(0.0F, Math.min(1.0F, (t - 2.5F) / 0.4F)));
+				mad = true;
+			}
+			characterState.playercharacters$setFart(fart);
 			characterState.playercharacters$setMiddleFinger(raise);
-			characterState.playercharacters$setMad(MiddleFingerEmote.isMad(id));
+			characterState.playercharacters$setMad(mad);
+			characterState.playercharacters$setBlink(character != null && character.isModel() && CharacterPoses.isBlinking(id, player.tickCount + partialTick));
 			if (raise > 0.0F) {
 				state.rightHandItemState.clear(); // the hand is busy
+			}
+			if (emote != null && emote.weight > 0.3F) {
+				state.rightHandItemState.clear(); // dancing needs both hands
+				state.leftHandItemState.clear();
 			}
 		} else {
 			characterState.playercharacters$setCharacter(null);
@@ -51,6 +78,25 @@ public abstract class AvatarRendererMixin {
 			characterState.playercharacters$setFart(0.0F);
 			characterState.playercharacters$setMiddleFinger(0.0F);
 			characterState.playercharacters$setMad(false);
+			characterState.playercharacters$setEmote(null);
+			characterState.playercharacters$setBlink(false);
+		}
+	}
+
+	/** Emotes can move the whole character: jumping, spinning, lying down, sitting. 3D characters also bob as they walk. */
+	@Inject(
+		method = "setupRotations(Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;FF)V",
+		at = @At("TAIL")
+	)
+	private void playercharacters$moveForEmote(AvatarRenderState state, PoseStack poseStack, float bodyRot, float scale, CallbackInfo ci) {
+		CharacterRenderState characterState = (CharacterRenderState) state;
+		PlayerCharacter character = characterState.playercharacters$character();
+		if (character != null && character.model() != null && !state.isFallFlying && state.swimAmount <= 0.0F) {
+			CharacterPoses.walkBounce(poseStack, character.model(), state.walkAnimationPos, state.walkAnimationSpeed);
+		}
+		EmotePose emote = characterState.playercharacters$emote();
+		if (emote != null && emote.weight > 0.0F) {
+			CharacterPoses.moveWhole(poseStack, emote, character == null ? null : character.model());
 		}
 	}
 

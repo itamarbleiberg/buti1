@@ -28,10 +28,11 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code model.obj} - the model (required). Objects/groups are matched to body parts by name:
  *       head, jaw, body, right_arm, left_arm, right_leg, left_leg. Anything else moves with the body.
  *       For the middle finger emote: objects named "mad_&lt;part&gt;" are only drawn while the character is mad,
- *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.</li>
+ *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.
+ *       "blink_&lt;part&gt;" (closed eyelids) is shown for a moment every few seconds.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
  *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn,
- *       smoke and pivots.</li>
+ *       smoke, bounce and pivots.</li>
  *   <li>{@code icon.png} - optional picture for the menus.</li>
  * </ul>
  * Models are expected in Blender's usual export orientation: Y up, facing +Z, 1 unit = 1 block.
@@ -61,6 +62,7 @@ final class ModelCharacterLoader {
 		@Nullable Float waddle;
 		@Nullable Float head_turn;
 		float @Nullable [] smoke;
+		@Nullable Float bounce;
 		@Nullable Map<String, PartOptions> parts;
 	}
 
@@ -69,6 +71,7 @@ final class ModelCharacterLoader {
 		NORMAL,
 		MAD,
 		CALM,
+		BLINK,
 		MIDDLE_FINGER
 	}
 
@@ -116,6 +119,7 @@ final class ModelCharacterLoader {
 		}
 
 		CharacterModel model = build(obj, options, texture);
+		model.makeSimplerCopies();
 		if (model.part(CharacterModel.Bone.JAW) == null) {
 			problems.add(id + "/model.obj: no part called \"jaw\", so the mouth won't move");
 		}
@@ -210,6 +214,7 @@ final class ModelCharacterLoader {
 		// Emote parts move exactly like the part they belong to, so they use its joint.
 		Map<CharacterModel.Bone, CharacterModel.Part> mad = new EnumMap<>(CharacterModel.Bone.class);
 		Map<CharacterModel.Bone, CharacterModel.Part> calm = new EnumMap<>(CharacterModel.Bone.class);
+		Map<CharacterModel.Bone, CharacterModel.Part> blink = new EnumMap<>(CharacterModel.Bone.class);
 		CharacterModel.Part middleFinger = null;
 		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
 			Slot slot = entry.getKey();
@@ -224,13 +229,15 @@ final class ModelCharacterLoader {
 			switch (slot.kind()) {
 				case MAD -> mad.put(slot.bone(), part);
 				case CALM -> calm.put(slot.bone(), part);
+				case BLINK -> blink.put(slot.bone(), part);
 				default -> middleFinger = part;
 			}
 		}
 		float waddle = options.waddle == null ? 0.0F : Math.max(0, Math.min(30, options.waddle));
 		float headTurn = options.head_turn == null ? 1.0F : Math.max(0, Math.min(1, options.head_turn));
 		Vector3f smoke = options.smoke != null && options.smoke.length == 3 ? t.point(options.smoke[0], options.smoke[1], options.smoke[2]) : null;
-		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke);
+		float bounce = options.bounce == null ? 0.0F : Math.max(0, Math.min(0.3F, options.bounce)) * t.scale * PLAYER_SCALE;
+		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke, blink, bounce);
 		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt, height * scale, extras);
 	}
 
@@ -244,6 +251,9 @@ final class ModelCharacterLoader {
 		}
 		if (name.startsWith("calm_")) {
 			return new Slot(Kind.CALM, boneFor(name.substring(5)));
+		}
+		if (name.startsWith("blink_")) {
+			return new Slot(Kind.BLINK, boneFor(name.substring(6)));
 		}
 		return new Slot(Kind.NORMAL, boneFor(name));
 	}

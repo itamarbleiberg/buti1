@@ -43,7 +43,7 @@ public final class CharacterMenuScreen extends Screen {
 	private static final Component YOU = Component.translatable("playercharacters.menu.you").withStyle(ChatFormatting.GRAY);
 	private static final boolean VOICE_CHAT_INSTALLED = FabricLoader.getInstance().isModLoaded("voicechat");
 	private static final int HEADER_HEIGHT = 44;
-	private static final int FOOTER_HEIGHT = 96;
+	private static final int FOOTER_HEIGHT = 120;
 	private static final int ROW_HEIGHT = 24;
 	private static final int FACE_SIZE = 16;
 	private static final int CHOICE_BUTTON_WIDTH = 130;
@@ -107,6 +107,16 @@ public final class CharacterMenuScreen extends Screen {
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.middle_finger.tooltip")))
 			.create(0, 0, 180, 20, Component.translatable("playercharacters.menu.middle_finger"),
 				(button, value) -> this.settings.setMiddleFinger(value)));
+
+		LinearLayout wheelRow = footer.addChild(LinearLayout.horizontal().spacing(8));
+		wheelRow.addChild(CycleButton.onOffBuilder(this.settings.emoteMusic())
+			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.emote_music.tooltip")))
+			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.emote_music"),
+				(button, value) -> this.settings.setEmoteMusic(value)));
+		wheelRow.addChild(CycleButton.onOffBuilder(this.settings.shareEmotes())
+			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.share_emotes.tooltip")))
+			.create(0, 0, 180, 20, Component.translatable("playercharacters.menu.share_emotes"),
+				(button, value) -> this.settings.setShareEmotes(value)));
 
 		LinearLayout buttonRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.open_folder"),

@@ -6,6 +6,7 @@
   "waddle": 8,
   "head_turn": 0.8,
   "smoke": [0.109, 1.212, 0.336],
+  "bounce": 0.02,
   "parts": {
     "head": { "pivot": [0, 1.12, 0] },
     "jaw": { "pivot": [0, 1.262, 0.15] },
