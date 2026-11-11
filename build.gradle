@@ -1,8 +1,3 @@
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.security.MessageDigest
-import java.util.zip.ZipFile
-
 plugins {
 	// Minecraft 1.21.11 and older are obfuscated, so they use the remapping version of Loom.
 	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
@@ -28,12 +23,6 @@ dependencies {
 
 	// Only needed to compile the voice chat plugin. Simple Voice Chat provides it at runtime.
 	compileOnly "de.maxhenkel.voicechat:voicechat-api:${project.voicechat_api_version}"
-
-	// Offline speech recognition for fart detection, packed into the mod jar. It needs JNA, which Minecraft already has.
-	implementation("com.alphacephei:vosk:${project.vosk_version}") {
-		transitive = false
-	}
-	include "com.alphacephei:vosk:${project.vosk_version}"
 }
 
 // Automated in-game test (src/gametest). Not part of the mod jar. Run with: ./gradlew runClientGameTest
@@ -46,160 +35,12 @@ fabricApi {
 	}
 }
 
-/**
- * Downloads Vosk's small English speech model (Apache 2.0) and gets it ready for the mod jar. Its 24 MB graph/Gr.fst
- * is only used to recognize any English sentence, which the mod never does (it listens for a few words), so it is
- * replaced by graph/words.txt: the word list stored inside Gr.fst, which Vosk reads instead.
- */
-abstract class PrepareSpeechModel extends DefaultTask {
-	@Input
-	abstract Property<String> getUrl()
-
-	@Input
-	abstract Property<String> getSha256()
-
-	@Input
-	abstract Property<String> getModelName()
-
-	/** Keeps the download outside build/, so "clean" doesn't download it again. */
-	@Internal
-	abstract DirectoryProperty getDownloadDir()
-
-	@OutputDirectory
-	abstract DirectoryProperty getOutputDir()
-
-	@TaskAction
-	void prepare() {
-		File zip = downloadDir.file(modelName.get() + ".zip").get().asFile
-		if (!zip.isFile() || hash(zip) != sha256.get()) {
-			zip.parentFile.mkdirs()
-			File part = new File(zip.path + ".part")
-			logger.lifecycle("Downloading ${url.get()}")
-			URI.create(url.get()).toURL().withInputStream { input -> Files.copy(input, part.toPath(), StandardCopyOption.REPLACE_EXISTING) }
-			String actual = hash(part)
-			if (actual != sha256.get()) {
-				part.delete()
-				throw new GradleException("The downloaded speech model has SHA-256 ${actual}, expected ${sha256.get()}")
-			}
-			Files.move(part.toPath(), zip.toPath(), StandardCopyOption.REPLACE_EXISTING)
-		}
-
-		File out = outputDir.get().asFile
-		out.deleteDir()
-		String prefix = modelName.get() + "/"
-		new ZipFile(zip).withCloseable { archive ->
-			archive.entries().each { entry ->
-				if (entry.directory || !entry.name.startsWith(prefix)) {
-					return
-				}
-				File target = new File(out, entry.name)
-				target.parentFile.mkdirs()
-				archive.getInputStream(entry).withCloseable { input ->
-					if (entry.name == prefix + "graph/Gr.fst") {
-						writeWordList(input, new File(target.parentFile, "words.txt"))
-					} else {
-						Files.copy(input, target.toPath())
-					}
-				}
-			}
-		}
-		if (!new File(out, prefix + "graph/words.txt").isFile()) {
-			throw new GradleException("The speech model has no graph/Gr.fst to take the word list from")
-		}
-	}
-
-	static String hash(File file) {
-		MessageDigest digest = MessageDigest.getInstance("SHA-256")
-		file.withInputStream { input ->
-			byte[] buffer = new byte[1 << 16]
-			int n
-			while ((n = input.read(buffer)) > 0) {
-				digest.update(buffer, 0, n)
-			}
-		}
-		return digest.digest().encodeHex().toString()
-	}
-
-	/** Reads the word list (output symbol table) of an OpenFst file and writes it as Kaldi's "word id" lines. */
-	static void writeWordList(InputStream fst, File wordsTxt) {
-		DataInputStream data = new DataInputStream(new BufferedInputStream(fst))
-		def readInt = { -> Integer.reverseBytes(data.readInt()) }
-		def readLong = { -> Long.reverseBytes(data.readLong()) }
-		def readString = { ->
-			byte[] bytes = new byte[readInt()]
-			data.readFully(bytes)
-			new String(bytes, 'UTF-8')
-		}
-		def readSymbols = { ->
-			if (readInt() != 2125658996) {
-				throw new GradleException("Gr.fst: unexpected symbol table format")
-			}
-			readString() // table name
-			readLong() // next free key
-			long size = readLong()
-			List<String> lines = []
-			for (long i = 0; i < size; i++) {
-				String word = readString()
-				lines << word + " " + readLong()
-			}
-			lines
-		}
-
-		if (readInt() != 2125659606) {
-			throw new GradleException("Gr.fst is not an OpenFst file")
-		}
-		readString() // FST type
-		readString() // arc type
-		readInt() // version
-		int flags = readInt()
-		4.times { readLong() } // properties, start state, number of states, number of arcs
-		List<String> words = null
-		if ((flags & 1) != 0) {
-			words = readSymbols() // input symbols
-		}
-		if ((flags & 2) != 0) {
-			words = readSymbols() // output symbols: the words
-		}
-		if (words == null) {
-			throw new GradleException("Gr.fst has no word list")
-		}
-		wordsTxt.withWriter('UTF-8') { writer ->
-			words.each { line ->
-				writer.write(line)
-				writer.write('\n')
-			}
-		}
-	}
-}
-
-def prepareSpeechModel = tasks.register('prepareSpeechModel', PrepareSpeechModel) {
-	url = "https://alphacephei.com/vosk/models/${project.speech_model}.zip"
-	sha256 = project.speech_model_sha256
-	modelName = project.speech_model
-	downloadDir = layout.projectDirectory.dir('.gradle/speech-model')
-	outputDir = layout.buildDirectory.dir('speech-model')
-}
-
 processResources {
 	def version = project.version
 	inputs.property "version", version
 
 	filesMatching("fabric.mod.json") {
 		expand "version": version
-	}
-
-	// Unpacked from the jar the first time fart detection is used (see SpeechModel).
-	from(prepareSpeechModel) {
-		into "assets/playercharacters/speech"
-	}
-}
-
-jar {
-	from('THIRD_PARTY_NOTICES.md') {
-		into 'META-INF'
-	}
-	from('licenses') {
-		into 'META-INF/licenses'
 	}
 }
 

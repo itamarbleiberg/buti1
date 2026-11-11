@@ -3,7 +3,7 @@
 	"id": "playercharacters",
 	"version": "${version}",
 	"name": "Player Characters",
-	"description": "Shows players on a server as 3D characters or skins you choose. Their mouths move when they talk in Simple Voice Chat, saying \"fart\" makes them fart, and saying \"fuck you\" makes them show the middle finger. Press K to choose who is which character.",
+	"description": "Shows players on a server as 3D characters or skins. Their mouths move when they talk in Simple Voice Chat, B opens an emote wheel with 32 emotes you can do while walking, and players who have the mod see each other's characters. Press K to choose who is which character.",
 	"icon": "assets/playercharacters/icon.png",
 	"environment": "client",
 	"entrypoints": {

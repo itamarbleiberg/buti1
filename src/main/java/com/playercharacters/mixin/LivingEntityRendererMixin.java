@@ -80,6 +80,9 @@ public abstract class LivingEntityRendererMixin {
 			if (CharacterModelRenderer.isAttachedToPlayerBody(layer)) {
 				return;
 			}
+			if (layer instanceof ItemInHandLayer<?, ?> && character.model().extras().hideHeldItems()) {
+				return; // the hands are already holding something (like a rifle), or they are paws
+			}
 			if (layer instanceof ItemInHandLayer<?, ?> && this.model instanceof PlayerModel playerModel) {
 				CharacterModelRenderer.withHandsAtCharacter(character.model(), playerModel,
 					() -> original.call(layer, poseStack, collector, light, state, yRot, xRot));

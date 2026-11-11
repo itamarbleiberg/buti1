@@ -29,10 +29,12 @@ import org.jspecify.annotations.Nullable;
  *       head, jaw, body, right_arm, left_arm, right_leg, left_leg. Anything else moves with the body.
  *       For the middle finger emote: objects named "mad_&lt;part&gt;" are only drawn while the character is mad,
  *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.
- *       "blink_&lt;part&gt;" (closed eyelids) is shown for a moment every few seconds.</li>
+ *       "blink_&lt;part&gt;" (closed eyelids) is shown for a moment every few seconds. "glow_&lt;part&gt;" glows in
+ *       the dark. Objects whose name starts with "tail" sway by themselves ("glow_tail..." glows and sways with them).
+ *       "fp_right_arm", "fp_left_arm" and "fp_middle_finger" are more detailed arms, only drawn in first person.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
  *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn,
- *       smoke, bounce and pivots.</li>
+ *       smoke, bounce, stance, arms, hide_held_items, particles and pivots.</li>
  *   <li>{@code icon.png} - optional picture for the menus.</li>
  * </ul>
  * Models are expected in Blender's usual export orientation: Y up, facing +Z, 1 unit = 1 block.
@@ -45,7 +47,7 @@ final class ModelCharacterLoader {
 	private static final float PLAYER_SCALE = 0.9375F;
 	/** Model space y of the feet. */
 	private static final float FEET_Y = 1.501F;
-	private static final int MAX_QUADS = 60_000;
+	private static final int MAX_QUADS = 100_000;
 
 	private ModelCharacterLoader() {
 	}
@@ -63,7 +65,26 @@ final class ModelCharacterLoader {
 		@Nullable Float head_turn;
 		float @Nullable [] smoke;
 		@Nullable Float bounce;
+		/** "two_legs" (the default) or "four_legs". */
+		@Nullable String stance;
+		/** "normal" (the default) or "rifle". */
+		@Nullable String arms;
+		@Nullable Boolean hide_held_items;
+		@Nullable List<ParticleOptions> particles;
 		@Nullable Map<String, PartOptions> parts;
+	}
+
+	@SuppressWarnings("unused")
+	private static final class ParticleOptions {
+		@Nullable String particle;
+		@Nullable String color;
+		@Nullable Float size;
+		@Nullable String part;
+		float @Nullable [] at;
+		@Nullable Integer every;
+		@Nullable String when;
+		@Nullable Float spread;
+		float @Nullable [] velocity;
 	}
 
 	/** What an object in model.obj is used for. */
@@ -72,10 +93,20 @@ final class ModelCharacterLoader {
 		MAD,
 		CALM,
 		BLINK,
-		MIDDLE_FINGER
+		GLOW,
+		MIDDLE_FINGER,
+		TAIL,
+		TAIL_GLOW,
+		FIRST_PERSON_RIGHT,
+		FIRST_PERSON_LEFT,
+		FIRST_PERSON_FINGER
 	}
 
-	private record Slot(Kind kind, CharacterModel.Bone bone) {
+	/** @param tail for tails: the tail's name (without "glow_") */
+	private record Slot(Kind kind, CharacterModel.Bone bone, String tail) {
+		Slot(Kind kind, CharacterModel.Bone bone) {
+			this(kind, bone, "");
+		}
 	}
 
 	@SuppressWarnings("unused")
@@ -118,7 +149,7 @@ final class ModelCharacterLoader {
 			}
 		}
 
-		CharacterModel model = build(obj, options, texture);
+		CharacterModel model = build(obj, options, texture, id, problems);
 		model.makeSimplerCopies();
 		if (model.part(CharacterModel.Bone.JAW) == null) {
 			problems.add(id + "/model.obj: no part called \"jaw\", so the mouth won't move");
@@ -151,17 +182,37 @@ final class ModelCharacterLoader {
 
 	// ------------------------------------------------------------------ building
 
-	private static CharacterModel build(Obj obj, Options options, Identifier texture) throws IOException {
+	private static CharacterModel build(Obj obj, Options options, Identifier texture, String id, List<String> problems) throws IOException {
 		double turn = Math.toRadians(options.turn == null ? 0 : options.turn);
 		float cos = (float) Math.cos(turn);
 		float sin = (float) Math.sin(turn);
 
-		// Turn the model, then find how tall it is and where its feet are.
+		// Turn the model, then find how tall it is and where its feet are. First-person arms don't count.
+		Map<Slot, List<Obj.Face>> facesBySlot = new LinkedHashMap<>();
+		int quads = 0;
+		for (Obj.Face face : obj.faces) {
+			facesBySlot.computeIfAbsent(slotFor(face.group), b -> new ArrayList<>()).add(face);
+			quads += face.corners.length <= 4 ? 1 : face.corners.length - 2;
+		}
+		if (quads > MAX_QUADS) {
+			throw new IOException("model.obj is too detailed (" + quads + " polygons, the limit is " + MAX_QUADS + ")");
+		}
 		float minY = Float.MAX_VALUE;
 		float maxY = -Float.MAX_VALUE;
-		for (float[] p : obj.positions) {
-			minY = Math.min(minY, p[1]);
-			maxY = Math.max(maxY, p[1]);
+		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
+			if (isFirstPerson(entry.getKey().kind())) {
+				continue;
+			}
+			for (Obj.Face face : entry.getValue()) {
+				for (Obj.Corner corner : face.corners) {
+					float y = obj.positions.get(corner.position)[1];
+					minY = Math.min(minY, y);
+					maxY = Math.max(maxY, y);
+				}
+			}
+		}
+		if (minY > maxY) {
+			throw new IOException("model.obj has only first-person arms");
 		}
 		float height = maxY - minY;
 		float scale;
@@ -175,16 +226,6 @@ final class ModelCharacterLoader {
 			scale = 1.0F;
 		}
 		Transform t = new Transform(cos, sin, minY, scale / PLAYER_SCALE);
-
-		Map<Slot, List<Obj.Face>> facesBySlot = new LinkedHashMap<>();
-		int quads = 0;
-		for (Obj.Face face : obj.faces) {
-			facesBySlot.computeIfAbsent(slotFor(face.group), b -> new ArrayList<>()).add(face);
-			quads += face.corners.length <= 4 ? 1 : face.corners.length - 2;
-		}
-		if (quads > MAX_QUADS) {
-			throw new IOException("model.obj is too detailed (" + quads + " polygons, the limit is " + MAX_QUADS + ")");
-		}
 
 		Map<CharacterModel.Bone, CharacterModel.Part> parts = new EnumMap<>(CharacterModel.Bone.class);
 		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
@@ -215,36 +256,198 @@ final class ModelCharacterLoader {
 		Map<CharacterModel.Bone, CharacterModel.Part> mad = new EnumMap<>(CharacterModel.Bone.class);
 		Map<CharacterModel.Bone, CharacterModel.Part> calm = new EnumMap<>(CharacterModel.Bone.class);
 		Map<CharacterModel.Bone, CharacterModel.Part> blink = new EnumMap<>(CharacterModel.Bone.class);
+		Map<CharacterModel.Bone, CharacterModel.Part> glow = new EnumMap<>(CharacterModel.Bone.class);
+		Map<String, List<Obj.Face>> tailFaces = new LinkedHashMap<>();
+		Map<String, List<Obj.Face>> tailGlowFaces = new LinkedHashMap<>();
 		CharacterModel.Part middleFinger = null;
+		CharacterModel.Part fpRight = null;
+		CharacterModel.Part fpLeft = null;
+		CharacterModel.Part fpFinger = null;
 		for (Map.Entry<Slot, List<Obj.Face>> entry : facesBySlot.entrySet()) {
 			Slot slot = entry.getKey();
-			if (slot.kind() == Kind.NORMAL) {
-				continue;
+			switch (slot.kind()) {
+				case NORMAL -> {
+					continue;
+				}
+				case TAIL -> {
+					tailFaces.computeIfAbsent(slot.tail(), k -> new ArrayList<>()).addAll(entry.getValue());
+					continue;
+				}
+				case TAIL_GLOW -> {
+					tailGlowFaces.computeIfAbsent(slot.tail(), k -> new ArrayList<>()).addAll(entry.getValue());
+					continue;
+				}
+				default -> {
+				}
 			}
 			CharacterModel.Part part = buildPart(obj, entry.getValue(), slot.bone(), partOptions(options, slot.bone()), t);
 			CharacterModel.Part main = parts.get(slot.bone());
 			if (main != null) {
-				part = part.withPivot(main.pivot());
+				part = isFirstPerson(slot.kind()) ? new CharacterModel.Part(part.vertices(), part.colors(), main.pivot(), main.hand()) : part.withPivot(main.pivot());
 			}
 			switch (slot.kind()) {
 				case MAD -> mad.put(slot.bone(), part);
 				case CALM -> calm.put(slot.bone(), part);
 				case BLINK -> blink.put(slot.bone(), part);
+				case GLOW -> glow.put(slot.bone(), part);
+				case FIRST_PERSON_RIGHT -> fpRight = part;
+				case FIRST_PERSON_LEFT -> fpLeft = part;
+				case FIRST_PERSON_FINGER -> fpFinger = part;
 				default -> middleFinger = part;
 			}
 		}
+		Map<String, CharacterModel.Tail> tails = buildTails(obj, tailFaces, tailGlowFaces, options, parts, t, id, problems);
+
 		float waddle = options.waddle == null ? 0.0F : Math.max(0, Math.min(30, options.waddle));
 		float headTurn = options.head_turn == null ? 1.0F : Math.max(0, Math.min(1, options.head_turn));
 		Vector3f smoke = options.smoke != null && options.smoke.length == 3 ? t.point(options.smoke[0], options.smoke[1], options.smoke[2]) : null;
 		float bounce = options.bounce == null ? 0.0F : Math.max(0, Math.min(0.3F, options.bounce)) * t.scale * PLAYER_SCALE;
-		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke, blink, bounce);
+		CharacterModel.Stance stance = "four_legs".equalsIgnoreCase(options.stance) || "four legs".equalsIgnoreCase(options.stance)
+			? CharacterModel.Stance.FOUR_LEGS : CharacterModel.Stance.TWO_LEGS;
+		CharacterModel.Arms arms = "rifle".equalsIgnoreCase(options.arms) ? CharacterModel.Arms.RIFLE : CharacterModel.Arms.NORMAL;
+		List<CharacterModel.Emitter> emitters = emitters(options, tails, t, id, problems);
+		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke, blink, bounce,
+			glow, List.copyOf(tails.values()), stance, arms, Boolean.TRUE.equals(options.hide_held_items),
+			new CharacterModel.FirstPerson(fpRight, fpLeft, fpFinger), emitters);
 		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt, height * scale, extras);
+	}
+
+	private static boolean isFirstPerson(Kind kind) {
+		return kind == Kind.FIRST_PERSON_RIGHT || kind == Kind.FIRST_PERSON_LEFT || kind == Kind.FIRST_PERSON_FINGER;
+	}
+
+	/**
+	 * Tails by name, in the order they appear in model.obj. Each sways around its base, which is its joint in
+	 * character.json or its point nearest the body.
+	 */
+	private static Map<String, CharacterModel.Tail> buildTails(Obj obj, Map<String, List<Obj.Face>> tailFaces, Map<String, List<Obj.Face>> glowFaces,
+		Options options, Map<CharacterModel.Bone, CharacterModel.Part> parts, Transform t, String id, List<String> problems) {
+		Map<String, CharacterModel.Tail> tails = new LinkedHashMap<>();
+		CharacterModel.Part body = parts.get(CharacterModel.Bone.BODY);
+		Vector3f bodyPivot = body != null ? body.pivot() : new Vector3f(0.0F, FEET_Y * 0.5F, 0.0F);
+		for (Map.Entry<String, List<Obj.Face>> entry : tailFaces.entrySet()) {
+			CharacterModel.Part part = buildPart(obj, entry.getValue(), CharacterModel.Bone.BODY, null, t);
+			PartOptions partOptions = options.parts == null ? null : options.parts.get(entry.getKey());
+			Vector3f base;
+			if (partOptions != null && partOptions.pivot != null && partOptions.pivot.length == 3) {
+				base = t.point(partOptions.pivot[0], partOptions.pivot[1], partOptions.pivot[2]);
+			} else {
+				base = nearest(part, bodyPivot);
+			}
+			Vector3f tip = new Vector3f(base);
+			float length = 0.0F;
+			float[] v = part.vertices();
+			for (int o = 0; o < v.length; o += 8) {
+				float d = base.distance(v[o], v[o + 1], v[o + 2]);
+				if (d > length) {
+					length = d;
+					tip.set(v[o], v[o + 1], v[o + 2]);
+				}
+			}
+			List<Obj.Face> glow = glowFaces.remove(entry.getKey());
+			CharacterModel.Part glowPart = glow == null ? null : buildPart(obj, glow, CharacterModel.Bone.BODY, null, t);
+			tails.put(entry.getKey(), new CharacterModel.Tail(part.withPivot(base), glowPart == null ? null : glowPart.withPivot(base), base,
+				Math.max(0.01F, length), tip, tails.size()));
+		}
+		for (String orphan : glowFaces.keySet()) {
+			problems.add(id + "/model.obj: \"glow_" + orphan + "\" has no tail called \"" + orphan + "\"");
+		}
+		return tails;
+	}
+
+	private static Vector3f nearest(CharacterModel.Part part, Vector3f to) {
+		Vector3f best = new Vector3f(to);
+		float bestDistance = Float.MAX_VALUE;
+		float[] v = part.vertices();
+		for (int o = 0; o < v.length; o += 8) {
+			float d = to.distanceSquared(v[o], v[o + 1], v[o + 2]);
+			if (d < bestDistance) {
+				bestDistance = d;
+				best.set(v[o], v[o + 1], v[o + 2]);
+			}
+		}
+		return best;
+	}
+
+	private static List<CharacterModel.Emitter> emitters(Options options, Map<String, CharacterModel.Tail> tails, Transform t, String id,
+		List<String> problems) {
+		List<CharacterModel.Emitter> emitters = new ArrayList<>();
+		if (options.particles == null) {
+			return emitters;
+		}
+		for (ParticleOptions p : options.particles) {
+			if (p == null || p.particle == null || p.particle.isBlank()) {
+				problems.add(id + "/character.json: a particle without \"particle\" was skipped");
+				continue;
+			}
+			String particle = p.particle.strip().toLowerCase(Locale.ROOT);
+			if (!particle.contains(":")) {
+				particle = "minecraft:" + particle;
+			}
+			int color = 0xFFFFFF;
+			if (p.color != null) {
+				try {
+					color = Integer.parseInt(p.color.strip().replace("#", ""), 16) & 0xFFFFFF;
+				} catch (NumberFormatException e) {
+					problems.add(id + "/character.json: particle color \"" + p.color + "\" isn't like \"#55E0FF\"");
+				}
+			}
+			String partName = p.part == null ? "body" : normalize(p.part);
+			CharacterModel.Tail attachedTail = tails.get(partName);
+			int tail = attachedTail == null ? -1 : attachedTail.index();
+			CharacterModel.Bone bone = attachedTail == null ? boneFor(partName) : CharacterModel.Bone.BODY;
+			Vector3f at;
+			if (p.at != null && p.at.length == 3) {
+				at = t.point(p.at[0], p.at[1], p.at[2]);
+			} else if (attachedTail != null) {
+				at = new Vector3f(attachedTail.tip());
+			} else {
+				at = new Vector3f(0.0F, FEET_Y * 0.5F, 0.0F);
+			}
+			CharacterModel.Emitter.When when = switch (p.when == null ? "always" : p.when.strip().toLowerCase(Locale.ROOT)) {
+				case "moving", "walking" -> CharacterModel.Emitter.When.MOVING;
+				case "sprinting", "running" -> CharacterModel.Emitter.When.SPRINTING;
+				case "still", "standing_still", "standing" -> CharacterModel.Emitter.When.STANDING_STILL;
+				default -> CharacterModel.Emitter.When.ALWAYS;
+			};
+			Vector3f velocity = new Vector3f();
+			if (p.velocity != null && p.velocity.length == 3) {
+				float x = p.velocity[0];
+				float z = p.velocity[2];
+				velocity.set(x * t.cos + z * t.sin, p.velocity[1], -x * t.sin + z * t.cos);
+			}
+			emitters.add(new CharacterModel.Emitter(particle, color, p.size == null ? 1.0F : Math.max(0.05F, Math.min(4.0F, p.size)), bone, tail, at,
+				p.every == null ? 4 : Math.max(1, Math.min(200, p.every)), when, p.spread == null ? 0.0F : Math.max(0.0F, Math.min(2.0F, p.spread)), velocity));
+		}
+		return emitters;
 	}
 
 	static Slot slotFor(String group) {
 		String name = normalize(group);
+		if (name.startsWith("fp_") || name.startsWith("first_person_")) {
+			String rest = name.substring(name.startsWith("fp_") ? 3 : 13);
+			if (rest.startsWith("middle_finger")) {
+				return new Slot(Kind.FIRST_PERSON_FINGER, CharacterModel.Bone.RIGHT_ARM);
+			}
+			CharacterModel.Bone bone = boneFor(rest);
+			if (bone == CharacterModel.Bone.RIGHT_ARM) {
+				return new Slot(Kind.FIRST_PERSON_RIGHT, bone);
+			}
+			if (bone == CharacterModel.Bone.LEFT_ARM) {
+				return new Slot(Kind.FIRST_PERSON_LEFT, bone);
+			}
+		}
 		if (name.startsWith("middle_finger")) {
 			return new Slot(Kind.MIDDLE_FINGER, CharacterModel.Bone.RIGHT_ARM);
+		}
+		if (name.startsWith("glow_tail")) {
+			return new Slot(Kind.TAIL_GLOW, CharacterModel.Bone.BODY, name.substring(5));
+		}
+		if (name.startsWith("tail")) {
+			return new Slot(Kind.TAIL, CharacterModel.Bone.BODY, name);
+		}
+		if (name.startsWith("glow_")) {
+			return new Slot(Kind.GLOW, boneFor(name.substring(5)));
 		}
 		if (name.startsWith("mad_")) {
 			return new Slot(Kind.MAD, boneFor(name.substring(4)));
@@ -259,7 +462,7 @@ final class ModelCharacterLoader {
 	}
 
 	private static String normalize(String group) {
-		return group.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_').replace('.', '_');
+		return group.strip().toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_').replace('.', '_');
 	}
 
 	private static @Nullable PartOptions partOptions(Options options, CharacterModel.Bone bone) {
@@ -403,10 +606,10 @@ final class ModelCharacterLoader {
 			case HEAD -> List.of("head");
 			case JAW -> List.of("jaw", "lower_jaw", "mouth", "chin");
 			case BODY -> List.of("body", "torso", "chest");
-			case RIGHT_ARM -> List.of("right_arm", "rightarm", "arm_right", "arm_r", "r_arm");
-			case LEFT_ARM -> List.of("left_arm", "leftarm", "arm_left", "arm_l", "l_arm");
-			case RIGHT_LEG -> List.of("right_leg", "rightleg", "leg_right", "leg_r", "r_leg");
-			case LEFT_LEG -> List.of("left_leg", "leftleg", "leg_left", "leg_l", "l_leg");
+			case RIGHT_ARM -> List.of("right_arm", "rightarm", "arm_right", "arm_r", "r_arm", "front_right_leg");
+			case LEFT_ARM -> List.of("left_arm", "leftarm", "arm_left", "arm_l", "l_arm", "front_left_leg");
+			case RIGHT_LEG -> List.of("right_leg", "rightleg", "leg_right", "leg_r", "r_leg", "back_right_leg");
+			case LEFT_LEG -> List.of("left_leg", "leftleg", "leg_left", "leg_l", "l_leg", "back_left_leg");
 		};
 	}
 

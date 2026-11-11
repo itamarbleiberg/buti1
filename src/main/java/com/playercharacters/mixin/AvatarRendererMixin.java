@@ -44,16 +44,17 @@ public abstract class AvatarRendererMixin {
 			characterState.playercharacters$setCharacter(character);
 			EmotePose emote = EmotePlayer.pose(id, partialTick);
 			characterState.playercharacters$setEmote(emote);
-			float jaw = character != null && character.isModel() ? JawAnimator.jawFor(id) : 0.0F;
+			// The emote wheel's pictures show only the emote: no talking, no blinking.
+			Emote previewed = EmotePlayer.previewEmote(id);
+			float jaw = character != null && character.isModel() && previewed == null ? JawAnimator.jawFor(id) : 0.0F;
 			if (emote != null && character != null && character.isModel()) {
 				jaw = Math.max(jaw, emote.jaw * emote.weight); // laughing, shouting, "six seven"...
 			}
 			characterState.playercharacters$setJaw(jaw);
-			float fart = FartEffects.bend(id, partialTick);
-			float raise = MiddleFingerEmote.raise(id, partialTick);
-			boolean mad = MiddleFingerEmote.isMad(id) || emote != null && emote.mad && emote.weight > 0.5F;
+			float fart = previewed != null ? 0.0F : FartEffects.bend(id, partialTick);
+			float raise = previewed != null ? 0.0F : MiddleFingerEmote.raise(id, partialTick);
+			boolean mad = previewed == null && MiddleFingerEmote.isMad(id) || emote != null && emote.mad && emote.weight > 0.5F;
 			// The emote wheel shows the fart and the middle finger too.
-			Emote previewed = EmotePlayer.previewEmote(id);
 			if (previewed == Emotes.FART) {
 				fart = FartEffects.bendAt(EmotePlayer.previewSeconds() % 1.8F);
 			} else if (previewed == Emotes.MIDDLE_FINGER) {
@@ -64,7 +65,8 @@ public abstract class AvatarRendererMixin {
 			characterState.playercharacters$setFart(fart);
 			characterState.playercharacters$setMiddleFinger(raise);
 			characterState.playercharacters$setMad(mad);
-			characterState.playercharacters$setBlink(character != null && character.isModel() && CharacterPoses.isBlinking(id, player.tickCount + partialTick));
+			characterState.playercharacters$setBlink(character != null && character.isModel() && previewed == null
+				&& CharacterPoses.isBlinking(id, player.tickCount + partialTick));
 			if (raise > 0.0F) {
 				state.rightHandItemState.clear(); // the hand is busy
 			}
@@ -91,6 +93,9 @@ public abstract class AvatarRendererMixin {
 	private void playercharacters$moveForEmote(AvatarRenderState state, PoseStack poseStack, float bodyRot, float scale, CallbackInfo ci) {
 		CharacterRenderState characterState = (CharacterRenderState) state;
 		PlayerCharacter character = characterState.playercharacters$character();
+		if (character != null && character.model() != null && character.model().extras().fourLegs()) {
+			CharacterPoses.levelFourLegs(poseStack, state);
+		}
 		if (character != null && character.model() != null && !state.isFallFlying && state.swimAmount <= 0.0F) {
 			CharacterPoses.walkBounce(poseStack, character.model(), state.walkAnimationPos, state.walkAnimationSpeed);
 		}

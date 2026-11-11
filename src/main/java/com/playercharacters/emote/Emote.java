@@ -10,14 +10,15 @@ import org.jspecify.annotations.Nullable;
  * An emote from the emote wheel: an animation of the whole character, with optional music and particles.
  * The fart and the middle finger are emotes too, played by their own code.
  *
- * @param id      stable name, used for translations
- * @param chat    what is sent as {@code /me <chat>} so that other players with the mod see the emote too
- * @param icon    a symbol for the wheel
- * @param seconds how long it lasts, or how long one round takes for emotes that loop
- * @param loops   whether it repeats until the player moves
+ * @param id       stable name, used for translations and music file names
+ * @param chat     what is sent as {@code /me <chat>} so that other players with the mod see the emote too
+ * @param seconds  how long it lasts, or how long one round takes for emotes that loop
+ * @param loops    whether it repeats until the player sneaks (or it has gone on for a minute)
+ * @param ownLegs  the emote moves the legs itself (the Griddy, sitting): walking doesn't take them over
+ * @param iconTime seconds into the emote that its picture in the wheel shows
  */
-public record Emote(String id, String chat, String icon, Kind kind, float seconds, boolean loops, Animation animation, @Nullable Music music,
-	@Nullable Effects effects) {
+public record Emote(String id, String chat, Kind kind, float seconds, boolean loops, Animation animation, @Nullable Music music,
+	@Nullable Effects effects, boolean ownLegs, float iconTime) {
 	public enum Kind {
 		POSE,
 		FART,

@@ -5,6 +5,7 @@ import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
+import com.playercharacters.share.CharacterSharing;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -22,6 +23,19 @@ final class ChoiceText {
 			case RANDOM -> Component.translatable("playercharacters.choice.random_is", result(choice, player));
 			case CHARACTER -> character(choice.characterId());
 		};
+	}
+
+	/** Label for a player who picked a character for themselves with the mod: "Their pick: Black Wolf". */
+	static Component theirPick(CharacterSharing.Look look) {
+		Component what;
+		if (look.ownSkin()) {
+			what = Component.translatable("playercharacters.choice.own_lower");
+		} else if (CharacterSharing.characterOf(look) != null) {
+			what = Component.literal(CharacterSharing.characterOf(look).displayName());
+		} else {
+			what = Component.translatable("playercharacters.choice.missing", look.character()).withStyle(ChatFormatting.YELLOW);
+		}
+		return Component.translatable("playercharacters.choice.their_pick", what).withStyle(ChatFormatting.AQUA);
 	}
 
 	/** Label for the "Default" button, e.g. "Default: Random". */

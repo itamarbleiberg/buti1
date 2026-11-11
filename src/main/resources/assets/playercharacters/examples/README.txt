@@ -3,13 +3,14 @@ PLAYER CHARACTERS - how to add your own characters
 
 After adding or changing files here, open the character menu in game (K by default)
 and click "Reload". Players shown as a character don't show their armor, but you
-still see their name tag and what they hold.
+still see their name tag and what they hold (unless the character has
+"hide_held_items", like the White Queen and the Black Wolf).
 
 There are two kinds of characters.
 
 
-3D CHARACTERS (like the Alien, Robot, Frog, Burger, Penguin, SpongeBob, Skinny Alien
-and 67, which is in the folder "Blue")
+3D CHARACTERS (like the Alien, Robot, Frog, Burger, Penguin, SpongeBob, Skinny Alien,
+White Queen, Black Wolf and 67, which is in the folder "Blue")
 -------------------------------------------------------------------------------------
 A folder with these files. The folder name is the character's name.
 
@@ -37,6 +38,19 @@ For the middle finger emote, a model can also have (all optional):
                   turns the finger up.
   blink_head      closed eyelids, shown for a moment every few seconds so the
                   character blinks. Any part works: blink_jaw, blink_body...
+
+More optional objects:
+
+  glow_head       glows in the dark, like the Black Wolf's eyes and runes.
+                  Any part works: glow_body, glow_right_arm...
+  tail_left       objects whose name starts with "tail" sway by themselves,
+                  bending along their length: slowly while standing, faster
+                  while walking, and they wag during emotes. The wolf has
+                  tail_left, tail_middle and tail_right.
+  glow_tail_left  glows, and sways with the tail of the same name.
+  fp_right_arm    a more detailed right arm, only drawn in first person (also
+                  fp_left_arm and fp_middle_finger). Without them, the normal
+                  arms are used.
 
 Far away, the mod draws a simpler copy of each model with fewer polygons, so many
 detailed characters don't slow the game down.
@@ -78,6 +92,37 @@ character.json, for example:
              from the size of each part. A part can have a pivot without being in the
              model: the Burger has no "head" object, only a head pivot, so its top bun
              (its "jaw") turns with the head.
+  stance     "four_legs" for animals, like the Black Wolf. Then right_arm and
+             left_arm are the front legs and right_leg and left_leg the back legs
+             (front_right_leg, back_left_leg... work as names too). They trot in
+             diagonal pairs, and for emotes the character stands up on its back legs.
+             (default "two_legs")
+  arms       "rifle" holds both arms out where the player looks, like the White
+             Queen aiming her rifle. Model the rifle as part of right_arm.
+             (default "normal")
+  hide_held_items
+             true doesn't show the items the player holds (the queen's hands are
+             on her rifle, the wolf has paws)
+  particles  particles that keep coming out of the character, for example the
+             flames on the wolf's tails:
+
+               "particles": [
+                 { "particle": "soul_fire_flame", "part": "tail_left", "every": 4,
+                   "spread": 0.035, "velocity": [0, 0.012, 0] },
+                 { "particle": "dust", "color": "#5FE6FF", "size": 0.5, "part": "head",
+                   "at": [0.097, 1.432, 1.02], "every": 13 }
+               ]
+
+             particle  a Minecraft particle name: flame, soul_fire_flame, smoke,
+                       heart, end_rod, squid_ink, dust...
+             part      the part it moves with (default "body"). For a tail, it comes
+                       out of the tip unless "at" is given.
+             at        where it comes out, in the model's own coordinates
+             every     ticks between two particles (default 4; 20 ticks = 1 second)
+             when      "always" (the default), "moving", "sprinting" or "still"
+             spread    random distance from that point, in blocks
+             velocity  blocks per tick: toward the character's left, up, forward
+             color     for "dust" only, like "#5FE6FF" (and "size", default 1)
 
 
 SKIN CHARACTERS
@@ -116,20 +161,25 @@ A skin and a 3D folder can't have the same name. If they do, the 3D one is used.
 
 EMOTES
 ------
-When a player says "fart" in voice chat (or types it in chat), their character bends
-over and farts. When they say "fuck you" or "fuck off", their character shows the middle
-finger and looks mad for a few seconds. This works for every character, and for players
-in their own skin. Turn them off with the "Farts" and "Middle finger" buttons in the
-character menu.
+The emote wheel (B by default) has 32 emotes, from the Default Dance and the 67 to the
+Floss, the Griddy, the Robot and push-ups. Point the mouse at one or scroll to it, then
+click. You can walk, run and jump while doing an emote; sneaking stops it. Dances play a
+little note block tune, or your own music: put .ogg files named after the emotes in the
+"music" folder next to this one (the "Music folder" button in the character menu).
+
+The fart and the middle finger are on the wheel too. Typing "fart" in chat also makes your
+character fart, and "fuck you" or "fuck off" makes it show the middle finger and look mad
+for a few seconds. This works for every character, and for players in their own skin. Turn
+them off with the "Farts" and "Middle finger" buttons in the character menu.
 
 In first person you see your 3D character's own arm. When you show the middle finger,
 your fist comes up in front of you, and when you fart, your screen turns green and
 bubbles pop.
 
-The emote wheel (B by default) has 32 emotes, from the Default Dance and the 67 to the
-Floss, the Griddy, the Robot and push-ups. Point the mouse at one or scroll to it, then
-click. Dances play a little note block tune. Players who have this mod see your emotes
-too: they are sent as a /me chat message, like "* Steve does the Default Dance" (turn
-that off with "Share emotes" in the character menu).
+Players who have this mod see your character and your emotes: they are told through /me
+chat messages, like "* Steve is playing as Black Wolf" and "* Steve does the Default
+Dance" (turn that off with "Share with players" in the character menu). They see your
+character only if they have one with the same name. The ten examples come with the mod,
+so those work unless they deleted them.
 
 The example characters can be deleted. They won't come back.

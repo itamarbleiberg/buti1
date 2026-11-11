@@ -13,9 +13,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Adds this mod's poses after Minecraft posed the player model: head turning and waddling for some characters, emotes,
- * the middle finger, and bending over to fart. 3D characters copy the player model's pose, and held items and armor
- * follow it too, so these changes move everything together.
+ * Adds this mod's poses after Minecraft posed the player model: four-legged walking, rifle aiming, head turning and
+ * waddling for some characters, emotes, the middle finger, and bending over to fart. 3D characters copy the player
+ * model's pose, and held items and armor follow it too, so these changes move everything together.
  */
 @Mixin(PlayerModel.class)
 public abstract class PlayerModelMixin {
@@ -26,12 +26,17 @@ public abstract class PlayerModelMixin {
 		PlayerCharacter character = characterState.playercharacters$character();
 		CharacterModel characterModel = character == null ? null : character.model();
 		if (characterModel != null) {
+			if (characterModel.extras().fourLegs()) {
+				CharacterPoses.fourLegs(model, state);
+			} else if (characterModel.extras().arms() == CharacterModel.Arms.RIFLE && !state.isFallFlying && state.swimAmount <= 0.0F) {
+				CharacterPoses.rifle(model);
+			}
 			CharacterPoses.headTurn(model, characterModel);
 			CharacterPoses.alive(model, state.ageInTicks, characterState.playercharacters$jaw(), state.id);
 		}
 		EmotePose emote = characterState.playercharacters$emote();
 		if (emote != null && emote.weight > 0.0F) {
-			CharacterPoses.emote(model, characterModel, emote);
+			CharacterPoses.emote(model, characterModel, emote, state.walkAnimationSpeed);
 		}
 		float raise = characterState.playercharacters$middleFinger();
 		if (raise > 0.0F) {

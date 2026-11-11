@@ -31,91 +31,89 @@ public final class Emotes {
 
 	// ------------------------------------------------------------------ page 1
 
-	public static final Emote DEFAULT_DANCE = add(new Emote("default_dance", "does the Default Dance", "♫", Kind.POSE, 4.0F, true,
-		Emotes::defaultDance, music(5,
-			Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x.x.x.x.x.x.x."),
-			Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "..x...x...x...x."),
-			Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.3F, 18, ".x.x.x.x.x.x.x.x"),
-			Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 . 6 . 9 . 9 . 11 . 11 . 9 . 13 .")), null));
-	public static final Emote SIX_SEVEN = add(new Emote("six_seven", "does the 67", "67", Kind.POSE, 1.6F, true, Emotes::sixSeven, music(6,
+	public static final Emote DEFAULT_DANCE = add(pose("default_dance", "does the Default Dance", 4.0F, true, Emotes::defaultDance, music(5,
+		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x.x.x.x.x.x.x."),
+		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "..x...x...x...x."),
+		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.3F, 18, ".x.x.x.x.x.x.x.x"),
+		Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 . 6 . 9 . 9 . 11 . 11 . 9 . 13 .")), null, false, 0.3F));
+	public static final Emote SIX_SEVEN = add(pose("six_seven", "does the 67", 1.6F, true, Emotes::sixSeven, music(6,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x..x..x.x..x..x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.45F, 12, "....x.......x..."),
-		Track.notes(SoundEvents.NOTE_BLOCK_PLING, 0.55F, "6 . . 7 . . . . 6 . . 7 . . . .")), null));
-	public static final Emote FLOSS = add(new Emote("floss", "flosses", "≋", Kind.POSE, 1.2F, true, Emotes::floss, music(4,
+		Track.notes(SoundEvents.NOTE_BLOCK_PLING, 0.55F, "6 . . 7 . . . . 6 . . 7 . . . .")), null, false, 0.4F));
+	public static final Emote FLOSS = add(pose("floss", "flosses", 1.2F, true, Emotes::floss, music(4,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x...x...x...x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "....x.......x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.22F, 20, "xxxxxxxxxxxxxxxx"),
-		Track.notes(SoundEvents.NOTE_BLOCK_BIT, 0.45F, "13 . 13 . 16 . 13 . 11 . 11 . 9 . 8 .")), null));
-	public static final Emote WAVE = add(new Emote("wave", "waves", "✋", Kind.POSE, 2.5F, false, Emotes::wave, null, null));
-	public static final Emote DAB = add(new Emote("dab", "dabs", "↗", Kind.POSE, 2.0F, false, Emotes::dab, null, null));
-	public static final Emote GRIDDY = add(new Emote("griddy", "hits the Griddy", "⚡", Kind.POSE, 3.2F, true, Emotes::griddy, music(5,
+		Track.notes(SoundEvents.NOTE_BLOCK_BIT, 0.45F, "13 . 13 . 16 . 13 . 11 . 11 . 9 . 8 .")), null, false, 0.45F));
+	public static final Emote WAVE = add(pose("wave", "waves", 2.5F, false, Emotes::wave, null, null, false, 0.9F));
+	public static final Emote DAB = add(pose("dab", "dabs", 2.0F, false, Emotes::dab, null, null, false, 1.0F));
+	public static final Emote GRIDDY = add(pose("griddy", "hits the Griddy", 3.2F, true, Emotes::griddy, music(5,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.8F, 6, "x..x..x.x..x..x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "....x.......x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.3F, 18, ".x.x.x.x.x.x.x.x"),
-		Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 . . 6 . . 9 . 11 . . 11 . . 9 .")), null));
-	public static final Emote FART = add(new Emote("fart", "farts", "☁", Kind.FART, 1.4F, false, (pose, t) -> {
-	}, null, null));
-	public static final Emote MIDDLE_FINGER = add(new Emote("middle_finger", "flips you off", "✖", Kind.MIDDLE_FINGER, 3.0F, false, (pose, t) -> {
-	}, null, null));
+		Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 . . 6 . . 9 . 11 . . 11 . . 9 .")), null, true, 2.8F));
+	public static final Emote FART = add(new Emote("fart", "farts", Kind.FART, 1.4F, false, (pose, t) -> {
+	}, null, null, false, 0.45F));
+	public static final Emote MIDDLE_FINGER = add(new Emote("middle_finger", "flips you off", Kind.MIDDLE_FINGER, 3.0F, false, (pose, t) -> {
+	}, null, null, false, 1.0F));
 
 	// ------------------------------------------------------------------ page 2
 
-	public static final Emote CLAP = add(new Emote("clap", "claps", "✺", Kind.POSE, 3.0F, false, Emotes::clap, null, Emotes::clapSound));
-	public static final Emote SALUTE = add(new Emote("salute", "salutes", "⚑", Kind.POSE, 2.5F, false, Emotes::salute, null, null));
-	public static final Emote FACEPALM = add(new Emote("facepalm", "facepalms", "☹", Kind.POSE, 2.6F, false, Emotes::facepalm, null, null));
-	public static final Emote LAUGH = add(new Emote("laugh", "laughs", "☺", Kind.POSE, 3.0F, false, Emotes::laugh, null, null));
-	public static final Emote CRY = add(new Emote("cry", "cries", "☔", Kind.POSE, 4.0F, false, Emotes::cry, null, Emotes::tears));
-	public static final Emote BOW = add(new Emote("bow", "bows", "♛", Kind.POSE, 2.6F, false, Emotes::bow, null, null));
-	public static final Emote SHRUG = add(new Emote("shrug", "shrugs", "¯\\_(ツ)_/¯", Kind.POSE, 2.2F, false, Emotes::shrug, null, null));
-	public static final Emote THINK = add(new Emote("think", "thinks", "?", Kind.POSE, 3.2F, false, Emotes::think, null, null));
+	public static final Emote CLAP = add(pose("clap", "claps", 3.0F, false, Emotes::clap, null, Emotes::clapSound, false, 0.36F));
+	public static final Emote SALUTE = add(pose("salute", "salutes", 2.5F, false, Emotes::salute, null, null, false, 1.2F));
+	public static final Emote FACEPALM = add(pose("facepalm", "facepalms", 2.6F, false, Emotes::facepalm, null, null, false, 1.3F));
+	public static final Emote LAUGH = add(pose("laugh", "laughs", 3.0F, false, Emotes::laugh, null, null, false, 1.0F));
+	public static final Emote CRY = add(pose("cry", "cries", 4.0F, false, Emotes::cry, null, Emotes::tears, false, 1.5F));
+	public static final Emote BOW = add(pose("bow", "bows", 2.6F, false, Emotes::bow, null, null, false, 1.2F));
+	public static final Emote SHRUG = add(pose("shrug", "shrugs", 2.2F, false, Emotes::shrug, null, null, false, 1.0F));
+	public static final Emote THINK = add(pose("think", "thinks", 3.2F, false, Emotes::think, null, null, false, 1.5F));
 
 	// ------------------------------------------------------------------ page 3
 
-	public static final Emote JUMPING_JACKS = add(new Emote("jumping_jacks", "does jumping jacks", "✶", Kind.POSE, 1.0F, true, Emotes::jumpingJacks,
-		music(5,
-			Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x."),
-			Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.35F, 18, ".x.x")), null));
-	public static final Emote SPIN = add(new Emote("spin", "spins around", "↻", Kind.POSE, 2.0F, false, Emotes::spin, null, Emotes::sparkles));
-	public static final Emote CHICKEN = add(new Emote("chicken", "does the Chicken Dance", "✿", Kind.POSE, 1.6F, true, Emotes::chicken, music(5,
+	public static final Emote JUMPING_JACKS = add(pose("jumping_jacks", "does jumping jacks", 1.0F, true, Emotes::jumpingJacks, music(5,
+		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x."),
+		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.35F, 18, ".x.x")), null, false, 0.5F));
+	public static final Emote SPIN = add(pose("spin", "spins around", 2.0F, false, Emotes::spin, null, Emotes::sparkles, false, 0.75F));
+	public static final Emote CHICKEN = add(pose("chicken", "does the Chicken Dance", 1.6F, true, Emotes::chicken, music(5,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x...x...x...x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.45F, 12, "..x...x...x...x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_COW_BELL, 0.45F, 12, "x.x.x.x.x.x.x.x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_XYLOPHONE, 0.5F, "18 18 . 18 18 . 16 . 18 18 . 18 18 . 20 .")), null));
-	public static final Emote ROBOT = add(new Emote("robot", "does the Robot", "⚙", Kind.POSE, 4.0F, true, Emotes::robot, music(5,
+		Track.notes(SoundEvents.NOTE_BLOCK_XYLOPHONE, 0.5F, "18 18 . 18 18 . 16 . 18 18 . 18 18 . 20 .")), null, false, 0.3F));
+	public static final Emote ROBOT = add(pose("robot", "does the Robot", 4.0F, true, Emotes::robot, music(5,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x...x...x...x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.3F, 20, "..x...x...x...x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_BIT, 0.5F, "6 . 18 . 6 . 13 . 6 . 18 . 11 . 13 .")), null));
-	public static final Emote DISCO = add(new Emote("disco", "does the Disco", "✦", Kind.POSE, 1.0F, true, Emotes::disco, music(5,
+		Track.notes(SoundEvents.NOTE_BLOCK_BIT, 0.5F, "6 . 18 . 6 . 13 . 6 . 18 . 11 . 13 .")), null, false, 1.3F));
+	public static final Emote DISCO = add(pose("disco", "does the Disco", 1.0F, true, Emotes::disco, music(5,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x.x.x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_HAT, 0.35F, 20, ".x.x.x.x"),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.4F, 12, "..x...x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 18 6 18 9 21 9 21")), null));
-	public static final Emote AIR_GUITAR = add(new Emote("air_guitar", "plays air guitar", "♬", Kind.POSE, 1.0F, true, Emotes::airGuitar, music(4,
+		Track.notes(SoundEvents.NOTE_BLOCK_BASS, 0.7F, "6 18 6 18 9 21 9 21")), null, false, 0.3F));
+	public static final Emote AIR_GUITAR = add(pose("air_guitar", "plays air guitar", 1.0F, true, Emotes::airGuitar, music(4,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x...x...x...x..."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "....x.......x..."),
-		Track.notes(SoundEvents.NOTE_BLOCK_GUITAR, 0.6F, "6 . 6 9 . 6 11 9 6 . 6 9 . 13 11 9")), null));
-	public static final Emote HEADBANG = add(new Emote("headbang", "headbangs", "✪", Kind.POSE, 0.84F, true, Emotes::headbang, music(4,
+		Track.notes(SoundEvents.NOTE_BLOCK_GUITAR, 0.6F, "6 . 6 9 . 6 11 9 6 . 6 9 . 13 11 9")), null, false, 0.3F));
+	public static final Emote HEADBANG = add(pose("headbang", "headbangs", 0.84F, true, Emotes::headbang, music(4,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.8F, 6, "x.x.x.x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.55F, 12, "..x...x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_GUITAR, 0.6F, "6 6 6 . 6 6 9 .")), null));
-	public static final Emote HYPE = add(new Emote("hype", "gets hyped", "▲", Kind.POSE, 1.2F, true, Emotes::hype, music(5,
+		Track.notes(SoundEvents.NOTE_BLOCK_GUITAR, 0.6F, "6 6 6 . 6 6 9 .")), null, false, 0.42F));
+	public static final Emote HYPE = add(pose("hype", "gets hyped", 1.2F, true, Emotes::hype, music(5,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.8F, 6, "x.x.x.x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.5F, 12, "..x...x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_PLING, 0.5F, "18 . 18 . 20 . 18 .")), null));
+		Track.notes(SoundEvents.NOTE_BLOCK_PLING, 0.5F, "18 . 18 . 20 . 18 .")), null, false, 0.3F));
 
 	// ------------------------------------------------------------------ page 4
 
-	public static final Emote FLEX = add(new Emote("flex", "flexes", "✊", Kind.POSE, 3.2F, false, Emotes::flex, null, null));
-	public static final Emote PUSH_UPS = add(new Emote("push_ups", "does push-ups", "▬", Kind.POSE, 1.2F, true, Emotes::pushUps, null, null));
-	public static final Emote SIT = add(new Emote("sit", "sits down", "▙", Kind.POSE, 6.0F, true, Emotes::sit, null, null));
-	public static final Emote ZOMBIE = add(new Emote("zombie", "acts like a zombie", "☣", Kind.POSE, 2.4F, true, Emotes::zombie, null, null));
-	public static final Emote L_DANCE = add(new Emote("l_dance", "does the L Dance", "L", Kind.POSE, 1.2F, true, Emotes::lDance, music(6,
+	public static final Emote FLEX = add(pose("flex", "flexes", 3.2F, false, Emotes::flex, null, null, false, 1.2F));
+	public static final Emote PUSH_UPS = add(pose("push_ups", "does push-ups", 1.2F, true, Emotes::pushUps, null, null, true, 1.2F));
+	public static final Emote SIT = add(pose("sit", "sits down", 6.0F, true, Emotes::sit, null, null, true, 1.0F));
+	public static final Emote ZOMBIE = add(pose("zombie", "acts like a zombie", 2.4F, true, Emotes::zombie, null, null, false, 0.6F));
+	public static final Emote L_DANCE = add(pose("l_dance", "does the L Dance", 1.2F, true, Emotes::lDance, music(6,
 		Track.hits(SoundEvents.NOTE_BLOCK_BASEDRUM, 0.75F, 6, "x.x.x.x."),
 		Track.hits(SoundEvents.NOTE_BLOCK_SNARE, 0.45F, 12, "..x...x."),
-		Track.notes(SoundEvents.NOTE_BLOCK_XYLOPHONE, 0.5F, "13 . 15 . 18 . 15 .")), null));
-	public static final Emote HEART = add(new Emote("heart", "makes a heart", "♥", Kind.POSE, 3.0F, false, Emotes::heart, null, Emotes::hearts));
-	public static final Emote KISS = add(new Emote("kiss", "blows a kiss", "♡", Kind.POSE, 2.2F, false, Emotes::kiss, null, Emotes::kissHeart));
-	public static final Emote CHEER = add(new Emote("cheer", "cheers", "★", Kind.POSE, 3.0F, false, Emotes::cheer, null, Emotes::confetti));
+		Track.notes(SoundEvents.NOTE_BLOCK_XYLOPHONE, 0.5F, "13 . 15 . 18 . 15 .")), null, false, 0.3F));
+	public static final Emote HEART = add(pose("heart", "makes a heart", 3.0F, false, Emotes::heart, null, Emotes::hearts, false, 1.3F));
+	public static final Emote KISS = add(pose("kiss", "blows a kiss", 2.2F, false, Emotes::kiss, null, Emotes::kissHeart, false, 1.15F));
+	public static final Emote CHEER = add(pose("cheer", "cheers", 3.0F, false, Emotes::cheer, null, Emotes::confetti, false, 0.37F));
 
 	private Emotes() {
 	}
@@ -125,6 +123,11 @@ public final class Emotes {
 		BY_ID.put(emote.id(), emote);
 		BY_CHAT.put(emote.chat().toLowerCase(Locale.ROOT), emote);
 		return emote;
+	}
+
+	private static Emote pose(String id, String chat, float seconds, boolean loops, Emote.Animation animation, @Nullable Music music,
+		Emote.@Nullable Effects effects, boolean ownLegs, float iconTime) {
+		return new Emote(id, chat, Kind.POSE, seconds, loops, animation, music, effects, ownLegs, iconTime);
 	}
 
 	private static Music music(int ticksPerStep, Track... tracks) {
@@ -190,22 +193,45 @@ public final class Emotes {
 
 	// ------------------------------------------------------------------ the dances
 
-	/** Two moves taking turns: fists pumping across the front with kicks, then low swings from side to side. */
+	/**
+	 * Fortnite's Default Dance, which comes from the "Turk" dance: stepping in place with the knees coming up while the
+	 * fists pump back and forth, then both arms thrown up and slammed down, a point forward, and arms crossed to finish.
+	 */
 	private static void defaultDance(EmotePose p, float t) {
-		float cycle = t % 4.0F;
-		float hop = hop(t, 0.5F);
-		EmotePose pump = new EmotePose();
-		float s = Mth.cos(PI * t / 0.5F);
-		pump.rightArmTo(0.12F, 0.15F + 0.75F * s, 1.0F).leftArmTo(-0.12F, 0.15F - 0.75F * s, 1.0F);
-		pump.rightLeg(-12 * Math.max(0, s), 0, 24 * Math.max(0, s)).leftLeg(-12 * Math.max(0, -s), 0, -24 * Math.max(0, -s));
-		pump.body(5, 12 * s, 0).head(-5, -10 * s, 6 * s).move(0, 0.08F * hop, 0);
-		EmotePose swing = new EmotePose();
-		float side = wave(t, 1.0F);
-		swing.rightArmTo(0.65F * side, -0.6F, 0.55F).leftArmTo(0.65F * side, -0.6F, 0.55F);
-		swing.body(10, -18 * side, 5 * side).head(6, 16 * side, -5 * side).rightLeg(-6, 0, 5).leftLeg(-6, 0, -5);
-		swing.move(0.04F * side, -0.05F * hop, 0);
-		p.copyFrom(pump);
-		p.mix(swing, ramp(cycle, 1.85F, 2.15F) * (1 - ramp(cycle, 3.85F, 4.0F)));
+		float c = t % 4.0F;
+		float s = Mth.sin(2 * PI * t / 1.0F);
+		EmotePose steps = new EmotePose();
+		steps.rightLeg(-44 * Math.max(0, s), 0, 4).leftLeg(-44 * Math.max(0, -s), 0, -4);
+		// The arm on the side of the foot that is down swings forward, like when running.
+		steps.rightArm(-22 + 46 * s, 10, 6).leftArm(-22 - 46 * s, -10, -6);
+		steps.body(7, 12 * s, 0).head(-4, -9 * s, 3 * s).move(0, 0.07F * hop(t, 0.5F), 0);
+		EmotePose up = new EmotePose().rightArm(-168, 0, 18).leftArm(-168, 0, -18).head(-18, 0, 0).body(-4, 0, 0).move(0, 0.13F, 0);
+		EmotePose slam = new EmotePose().rightArm(-12, 0, 28).leftArm(-12, 0, -28).body(20, 0, 0).head(14, 0, 0).rightLeg(-28, 0, 7).leftLeg(-28, 0, -7);
+		slam.hipDrop = 0.13F;
+		EmotePose point = new EmotePose().rightArmTo(0.12F, 0.12F, 1.0F).leftArmTo(-0.12F, 0.12F, 1.0F).body(10, 0, 0).head(-6, 0, 0)
+			.rightLeg(-10, 0, 3).leftLeg(4, 0, -3);
+		EmotePose cross = new EmotePose().rightArm(-78, 42, 0).leftArm(-74, -42, 0).body(-7, -8, 0).head(-7, 6, 7).leftLeg(-6, 0, 10).rightLeg(2, 0, 2);
+		cross.shoulderLift = 0.6F;
+		p.copyFrom(keyframes(c, new float[] {0.0F, 1.95F, 2.25F, 2.45F, 2.75F, 2.95F, 3.3F, 3.5F, 3.85F, 4.0F},
+			steps, steps, up, slam, slam, point, point, cross, cross, steps));
+		p.jaw = 0.25F * ramp(c, 2.25F, 2.4F) * (1 - ramp(c, 2.6F, 2.8F));
+	}
+
+	/** Goes through poses at the given times, moving smoothly from each one to the next. */
+	private static EmotePose keyframes(float c, float[] times, EmotePose... poses) {
+		int i = times.length - 1;
+		for (int k = 0; k < times.length - 1; k++) {
+			if (c < times[k + 1]) {
+				i = k;
+				break;
+			}
+		}
+		EmotePose out = new EmotePose();
+		out.copyFrom(poses[i]);
+		if (i < times.length - 1) {
+			out.mix(poses[i + 1], smooth((c - times[i]) / (times[i + 1] - times[i])));
+		}
+		return out;
 	}
 
 	/** Both hands held out palms up, going up and down in turns like scales, while the head bobs: "six, seven". */
@@ -217,29 +243,34 @@ public final class Emotes {
 		p.jaw = Math.max(0, wave(t, 0.8F, 0.1F)) * 0.7F;
 	}
 
-	/** Straight arms swinging from side to side, one in front of the body and one behind, with the hips the other way. */
+	/**
+	 * Straight arms swinging together from side to side around the hips, which go the other way: at each side one arm
+	 * is in front of the body and the other behind it, and they swap on the way across.
+	 */
 	private static void floss(EmotePose p, float t) {
 		float s = wave(t, 0.6F);
-		float c = Mth.cos(2 * PI * t / 0.6F);
-		p.rightArmTo(0.8F * s, -1.0F, 0.55F * c).leftArmTo(0.8F * s, -1.0F, -0.55F * c);
-		p.body(0, 0, -7 * s).head(0, 0, 5 * s).rightLeg(0, 0, -3 * s).leftLeg(0, 0, -3 * s);
-		p.move(-0.06F * s, 0, 0);
+		p.rightArmTo(0.9F * s, -1.0F, 0.5F * s).leftArmTo(0.9F * s, -1.0F, -0.5F * s);
+		p.body(0, 6 * s, -8 * s).head(0, -4 * s, 5 * s).rightLeg(0, 0, -4 * s).leftLeg(0, 0, -4 * s);
+		p.move(-0.08F * s, 0.02F * hop(t, 0.3F), 0);
 	}
 
-	/** Heels tapping forward in turns with arms swinging, leaning forward; now and then the hands go up like goggles. */
+	/**
+	 * The Griddy: leaning forward, heels tapping out in front in turns with a little skip, arms swinging hard the other
+	 * way, then both hands up around the eyes like goggles. It travels: walk while doing it.
+	 */
 	private static void griddy(EmotePose p, float t) {
-		float s = wave(t, 0.8F);
+		float s = wave(t, 0.7F);
 		EmotePose steps = new EmotePose();
-		steps.body(16, 0, 0).head(-12, 0, 0);
-		steps.rightLeg(8 - 42 * Math.max(0, s), 0, 2).leftLeg(8 - 42 * Math.max(0, -s), 0, -2);
-		steps.rightArm(45 * s, 0, 12).leftArm(-45 * s, 0, -12);
-		steps.move(0, 0.03F * hop(t, 0.4F), 0.03F * s);
+		steps.body(18, 6 * s, 0).head(-14, -4 * s, 0);
+		steps.rightLeg(10 - 48 * Math.max(0, s), 0, 3).leftLeg(10 - 48 * Math.max(0, -s), 0, -3);
+		steps.rightArm(55 * s, 0, 14).leftArm(-55 * s, 0, -14);
+		steps.move(0, 0.05F * hop(t, 0.35F), 0.035F * s);
 		EmotePose goggles = new EmotePose();
 		goggles.copyFrom(steps);
-		goggles.rightArmTo(0.3F, 0.62F, 0.75F).leftArmTo(-0.3F, 0.62F, 0.75F);
+		goggles.rightArmTo(0.34F, 0.64F, 0.72F, -40).leftArmTo(-0.34F, 0.64F, 0.72F, 40).head(-18, 0, 0).body(8, 0, 0);
 		float cycle = t % 3.2F;
 		p.copyFrom(steps);
-		p.mix(goggles, ramp(cycle, 2.4F, 2.6F) * (1 - ramp(cycle, 3.0F, 3.2F)));
+		p.mix(goggles, ramp(cycle, 2.3F, 2.5F) * (1 - ramp(cycle, 3.0F, 3.2F)));
 	}
 
 	private static void jumpingJacks(EmotePose p, float t) {
@@ -301,12 +332,15 @@ public final class Emotes {
 		p.jaw = 0.4F * nod;
 	}
 
-	/** Fists pumping in the air while jumping and shouting. */
+	/** Fortnite's Hype: bouncing from foot to foot with the fists pumping up in turns, shouting. */
 	private static void hype(EmotePose p, float t) {
-		float pump = hop(t, 0.6F);
-		p.rightArmTo(-0.1F, 0.3F + 0.9F * pump, 0.5F).leftArmTo(0.1F, 0.3F + 0.9F * pump, 0.5F);
-		p.head(-15 * pump, 0, 0).move(0, 0.16F * pump, 0);
-		p.jaw = 0.8F * pump;
+		float s = wave(t, 0.6F);
+		float right = Math.max(0, s);
+		float left = Math.max(0, -s);
+		p.rightArmTo(-0.15F, lerp(-0.2F, 1.0F, right), 0.55F).leftArmTo(0.15F, lerp(-0.2F, 1.0F, left), 0.55F);
+		p.rightLeg(-30 * left, 0, 6).leftLeg(-30 * right, 0, -6);
+		p.head(-12 * hop(t, 0.3F), 10 * s, 0).body(4, 10 * s, -5 * s).move(0.07F * s, 0.1F * hop(t, 0.3F), 0);
+		p.jaw = 0.75F * hop(t, 0.3F);
 	}
 
 	/** A hand making an L on the forehead, kicking out to the sides in turns. */

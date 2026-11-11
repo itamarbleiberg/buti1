@@ -4,7 +4,8 @@ import com.playercharacters.CharacterResolver;
 import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
-import com.playercharacters.speech.SpeechModel;
+import com.playercharacters.emote.EmoteMusic;
+import com.playercharacters.share.CharacterSharing;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -43,7 +44,7 @@ public final class CharacterMenuScreen extends Screen {
 	private static final Component YOU = Component.translatable("playercharacters.menu.you").withStyle(ChatFormatting.GRAY);
 	private static final boolean VOICE_CHAT_INSTALLED = FabricLoader.getInstance().isModLoaded("voicechat");
 	private static final int HEADER_HEIGHT = 44;
-	private static final int FOOTER_HEIGHT = 120;
+	private static final int FOOTER_HEIGHT = 124;
 	private static final int ROW_HEIGHT = 24;
 	private static final int FACE_SIZE = 16;
 	private static final int CHOICE_BUTTON_WIDTH = 130;
@@ -101,36 +102,48 @@ public final class CharacterMenuScreen extends Screen {
 		LinearLayout emoteRow = footer.addChild(LinearLayout.horizontal().spacing(8));
 		emoteRow.addChild(CycleButton.onOffBuilder(this.settings.fartDetection())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.farts.tooltip")))
-			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.farts"),
+			.create(0, 0, 100, 20, Component.translatable("playercharacters.menu.farts"),
 				(button, value) -> this.settings.setFartDetection(value)));
 		emoteRow.addChild(CycleButton.onOffBuilder(this.settings.middleFinger())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.middle_finger.tooltip")))
-			.create(0, 0, 180, 20, Component.translatable("playercharacters.menu.middle_finger"),
+			.create(0, 0, 134, 20, Component.translatable("playercharacters.menu.middle_finger"),
 				(button, value) -> this.settings.setMiddleFinger(value)));
-
-		LinearLayout wheelRow = footer.addChild(LinearLayout.horizontal().spacing(8));
-		wheelRow.addChild(CycleButton.onOffBuilder(this.settings.emoteMusic())
+		emoteRow.addChild(CycleButton.onOffBuilder(this.settings.emoteMusic())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.emote_music.tooltip")))
-			.create(0, 0, 130, 20, Component.translatable("playercharacters.menu.emote_music"),
+			.create(0, 0, 124, 20, Component.translatable("playercharacters.menu.emote_music"),
 				(button, value) -> this.settings.setEmoteMusic(value)));
-		wheelRow.addChild(CycleButton.onOffBuilder(this.settings.shareEmotes())
+
+		LinearLayout shareRow = footer.addChild(LinearLayout.horizontal().spacing(8));
+		shareRow.addChild(CycleButton.onOffBuilder(this.settings.shareEmotes())
 			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.share_emotes.tooltip")))
 			.create(0, 0, 180, 20, Component.translatable("playercharacters.menu.share_emotes"),
 				(button, value) -> this.settings.setShareEmotes(value)));
+		shareRow.addChild(CycleButton.onOffBuilder(this.settings.othersPicks())
+			.withTooltip(value -> Tooltip.create(Component.translatable("playercharacters.menu.others_picks.tooltip")))
+			.create(0, 0, 170, 20, Component.translatable("playercharacters.menu.others_picks"),
+				(button, value) -> this.settings.setOthersPicks(value)));
 
-		LinearLayout buttonRow = footer.addChild(LinearLayout.horizontal().spacing(8));
+		LinearLayout buttonRow = footer.addChild(LinearLayout.horizontal().spacing(6));
 		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.open_folder"),
 				button -> Util.getPlatform().openPath(CharacterLibrary.folder()))
-			.width(120)
+			.width(112)
 			.tooltip(Tooltip.create(Component.translatable("playercharacters.menu.open_folder.tooltip")))
+			.build());
+		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.music_folder"), button -> {
+				EmoteMusic.setUp();
+				Util.getPlatform().openPath(EmoteMusic.folder());
+			})
+			.width(90)
+			.tooltip(Tooltip.create(Component.translatable("playercharacters.menu.music_folder.tooltip")))
 			.build());
 		buttonRow.addChild(Button.builder(Component.translatable("playercharacters.menu.reload"), button -> {
 				CharacterLibrary.reload();
+				EmoteMusic.rescan();
 				this.rebuildWidgets();
 			})
-			.width(100)
+			.width(70)
 			.build());
-		buttonRow.addChild(Button.builder(CommonComponents.GUI_DONE, button -> this.onClose()).width(80).build());
+		buttonRow.addChild(Button.builder(CommonComponents.GUI_DONE, button -> this.onClose()).width(70).build());
 
 		layout.visitWidgets(this::addRenderableWidget);
 		this.repositionElements();
@@ -191,9 +204,6 @@ public final class CharacterMenuScreen extends Screen {
 		if (!VOICE_CHAT_INSTALLED) {
 			text.append(Component.literal("  "))
 				.append(Component.translatable("playercharacters.status.no_voice_chat").withStyle(ChatFormatting.RED));
-		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && (this.settings.fartDetection() || this.settings.middleFinger())) {
-			text.append(Component.literal("  "))
-				.append(Component.translatable("playercharacters.status.no_speech").withStyle(ChatFormatting.RED));
 		}
 		return text;
 	}
@@ -202,8 +212,6 @@ public final class CharacterMenuScreen extends Screen {
 		List<String> lines = new ArrayList<>(CharacterLibrary.problems());
 		if (!VOICE_CHAT_INSTALLED) {
 			lines.add(Component.translatable("playercharacters.status.no_voice_chat.tooltip").getString());
-		} else if (SpeechModel.status() == SpeechModel.Status.UNAVAILABLE && (this.settings.fartDetection() || this.settings.middleFinger())) {
-			lines.add(Component.translatable("playercharacters.status.no_speech.tooltip", String.valueOf(SpeechModel.problem())).getString());
 		}
 		return lines.isEmpty() ? null : Tooltip.create(Component.literal(String.join("\n", lines)));
 	}
@@ -296,7 +304,14 @@ public final class CharacterMenuScreen extends Screen {
 			int textX = faceX + FACE_SIZE + 6;
 			int textY = this.getContentYMiddle() - 4;
 
-			this.button.setMessage(ChoiceText.forPlayer(CharacterMenuScreen.this.settings.choiceFor(this.id), this.id));
+			CharacterSharing.Look look = this.self || !CharacterMenuScreen.this.settings.othersPicks() ? null : CharacterSharing.lookOf(this.id);
+			if (look != null) {
+				this.button.setMessage(ChoiceText.theirPick(look));
+				this.button.setTooltip(Tooltip.create(Component.translatable("playercharacters.menu.their_pick.tooltip", this.name)));
+			} else {
+				this.button.setMessage(ChoiceText.forPlayer(CharacterMenuScreen.this.settings.choiceFor(this.id), this.id));
+				this.button.setTooltip(null);
+			}
 			this.button.setX(this.getContentRight() - this.button.getWidth());
 			this.button.setY(this.getContentYMiddle() - this.button.getHeight() / 2);
 			int characterFaceX = this.button.getX() - FACE_SIZE - 6;

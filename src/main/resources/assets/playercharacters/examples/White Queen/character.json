@@ -1,0 +1,20 @@
+{
+  "name": "White Queen",
+  "size": 1.0,
+  "jaw_angle": 22,
+  "butt": [0, 0.42, -0.16],
+  "waddle": 6,
+  "head_turn": 0.6,
+  "bounce": 0.09,
+  "arms": "rifle",
+  "hide_held_items": true,
+  "parts": {
+    "head": { "pivot": [0, 0.862, 0] },
+    "jaw": { "pivot": [0, 1.137, 0.03] },
+    "body": { "pivot": [0, 0.5, 0] },
+    "right_arm": { "pivot": [-0.152, 1.03, 0], "hand": [-0.17, 0.484, 0.056] },
+    "left_arm": { "pivot": [0.152, 1.03, 0], "hand": [0.197, 0.47, 0.05] },
+    "right_leg": { "pivot": [-0.1, 0.3, 0] },
+    "left_leg": { "pivot": [0.1, 0.3, 0] }
+  }
+}

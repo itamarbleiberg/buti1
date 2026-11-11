@@ -1,21 +1,11 @@
 package com.playercharacters.test;
 
-import com.playercharacters.effects.FartEffects;
-import com.playercharacters.effects.MiddleFingerEmote;
-import com.playercharacters.speech.SpeechModel;
 import com.playercharacters.voice.TalkTracker;
 import de.maxhenkel.voicechat.api.VoicechatServerApi;
 import de.maxhenkel.voicechat.api.audiochannel.AudioChannel;
 import de.maxhenkel.voicechat.api.audiochannel.AudioPlayer;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.server.level.ServerLevel;
@@ -23,9 +13,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client,
- * for all three ways voice arrives: a nearby entity, a static (group-style) channel, and yourself. With recorded
- * sentences, also checks that saying "fart", "fuck you" and "fuck off" is recognized. Only loaded when Simple Voice Chat is installed.
+ * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client, for all three
+ * ways voice arrives: a nearby entity, a static (group-style) channel, and yourself. Only loaded when Simple Voice Chat
+ * is installed.
  */
 @SuppressWarnings("UnstableApiUsage")
 final class VoiceChatCheck {
@@ -93,91 +83,6 @@ final class VoiceChatCheck {
 		ownVoice.stopPlaying();
 		context.waitFor(client -> !TalkTracker.isMouthOpen(self), TIMEOUT_TICKS);
 		PlayerCharactersClientGameTest.check(true, "mouth closed again after the voice stopped");
-	}
-
-	/**
-	 * Speaks recorded sentences as our own player through the real voice chat pipeline (encoded, sent, decoded),
-	 * and checks that the fart detection hears "fart" but not a similar word.
-	 */
-	static void speech(ClientGameTestContext context, TestSingleplayerContext world, Path clips, int fartsBeforeVoice, Runnable fartScreenshot,
-		Runnable fingerScreenshot) {
-		VoicechatServerApi api = TestVoicePlugin.serverApi;
-		// The voices played before this started loading the speech model.
-		context.waitFor(client -> SpeechModel.status() == SpeechModel.Status.READY || SpeechModel.status() == SpeechModel.Status.UNAVAILABLE, TIMEOUT_TICKS);
-		check(SpeechModel.status() == SpeechModel.Status.READY, "speech recognition started (" + SpeechModel.status() + ", " + SpeechModel.problem() + ")");
-		check(context.computeOnClient(client -> FartEffects.startedCount()) == fartsBeforeVoice, "the test tones in voice chat didn't cause a fart");
-
-		// "... fart ...": our character farts.
-		int before = context.computeOnClient(client -> FartEffects.startedCount());
-		AudioPlayer sentence = say(world, api, clips.resolve("fart_sentence.wav"));
-		context.waitFor(client -> FartEffects.startedCount() > before, TIMEOUT_TICKS);
-		check(context.computeOnClient(client -> FartEffects.isFarting(client.player.getUUID())), "saying \"fart\" in voice chat made our character fart");
-		context.waitTicks(6);
-		fartScreenshot.run();
-		context.waitFor(client -> !sentence.isPlaying(), TIMEOUT_TICKS);
-		context.waitTicks(40);
-
-		// "well fuck you then": the middle finger, seen from the front.
-		context.runOnClient(client -> client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_FRONT));
-		int fingers = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
-		AudioPlayer insult = say(world, api, clips.resolve("fuck_you_sentence.wav"));
-		context.waitFor(client -> MiddleFingerEmote.startedCount() > fingers, TIMEOUT_TICKS);
-		check(context.computeOnClient(client -> MiddleFingerEmote.isActive(client.player.getUUID())),
-			"saying \"fuck you\" in voice chat made our character show the middle finger");
-		context.waitTicks(8);
-		fingerScreenshot.run();
-		context.waitFor(client -> !insult.isPlaying(), TIMEOUT_TICKS);
-		context.waitTicks(60);
-
-		// "why don't you fuck off": the middle finger too.
-		int fingersOff = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
-		AudioPlayer offSentence = say(world, api, clips.resolve("fuck_off_sentence.wav"));
-		context.waitFor(client -> MiddleFingerEmote.startedCount() > fingersOff, TIMEOUT_TICKS);
-		check(true, "saying \"fuck off\" in voice chat made our character show the middle finger");
-		context.waitFor(client -> !offSentence.isPlaying(), TIMEOUT_TICKS);
-		context.waitTicks(60);
-
-		// Lookalikes: "farm" and "thank you" do nothing.
-		int fartsBefore = context.computeOnClient(client -> FartEffects.startedCount());
-		int fingersBefore = context.computeOnClient(client -> MiddleFingerEmote.startedCount());
-		for (String clip : List.of("farm_sentence.wav", "thank_you_sentence.wav", "back_off_sentence.wav")) {
-			AudioPlayer other = say(world, api, clips.resolve(clip));
-			context.waitFor(client -> !other.isPlaying(), TIMEOUT_TICKS);
-			context.waitTicks(40); // time for the last words to be recognized
-		}
-		check(context.computeOnClient(client -> FartEffects.startedCount()) == fartsBefore, "a sentence with \"farm\" in it didn't cause a fart");
-		check(context.computeOnClient(client -> MiddleFingerEmote.startedCount()) == fingersBefore, "\"thank you\" and \"back off\" didn't cause a middle finger");
-	}
-
-	/** Plays a 48 kHz mono WAV file through a voice chat channel attached to our own player. */
-	private static AudioPlayer say(TestSingleplayerContext world, VoicechatServerApi api, Path wav) {
-		short[] pcm;
-		try (AudioInputStream in = AudioSystem.getAudioInputStream(wav.toFile())) {
-			byte[] bytes = in.readAllBytes();
-			pcm = new short[bytes.length / 2];
-			ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(pcm);
-		} catch (Exception e) {
-			throw new AssertionError("Couldn't read " + wav, e);
-		}
-		short[] audio = pcm;
-		int[] offset = {0};
-		Supplier<short[]> frames = () -> {
-			if (offset[0] >= audio.length) {
-				return null;
-			}
-			short[] frame = Arrays.copyOfRange(audio, offset[0], offset[0] + 960); // padded with silence at the end
-			offset[0] += 960;
-			return frame;
-		};
-		return world.getServer().computeOnServer(server -> {
-			ServerPlayer player = server.getPlayerList().getPlayers().getFirst();
-			// Like a real player's voice: the channel has the player's UUID. (Voice chat reports sound from the entity
-			// you are as a "static" sound with the channel's UUID.)
-			AudioChannel channel = api.createEntityAudioChannel(player.getUUID(), api.fromEntity(player));
-			AudioPlayer voice = api.createAudioPlayer(channel, api.createEncoder(), frames);
-			voice.startPlaying();
-			return voice;
-		});
 	}
 
 	private static void check(boolean condition, String what) {

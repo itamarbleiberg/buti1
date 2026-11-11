@@ -65,6 +65,8 @@ public final class CharacterLibrary {
 		EXAMPLES.put("SpongeBob", modelFiles("SpongeBob"));
 		EXAMPLES.put("Skinny Alien", modelFiles("Skinny Alien"));
 		EXAMPLES.put("Blue", modelFiles("Blue"));
+		EXAMPLES.put("White Queen", modelFiles("White Queen"));
+		EXAMPLES.put("Black Wolf", modelFiles("Black Wolf"));
 		// Versions 1 and 2 had the robot and the frog as skins.
 		REPLACES.put("Robot 3D", Map.of(
 			"Robot.png", "c25c1b4982abf476bbd50ea787b432fda2d01fe0ee381a091ca265e12408e539",
@@ -126,6 +128,15 @@ public final class CharacterLibrary {
 		outdated("Blue/model.obj", "041d6f6535c053f316d74a505e5432a2cbb637cae7406be04361e3721c549ab8");
 		outdated("Blue/character.json", "4540a938f01b735d301cb4f75435dca4aee82afa62276c5c0773b01ece7d5490");
 		outdated("Blue/icon.png", "ccc95bae24efe84bd3bf053e03d6c8408bfd6ce6e6cfc44cd20777e6f7ddba78");
+		// Version 6 (version 7 added detailed arms for first person; the settings and icons stayed the same).
+		outdated("Alien/model.obj", "b9f34cf0f791fada41e89001b3b3533668ee477081226b4c366639492c494951");
+		outdated("Robot/model.obj", "bb7b28a60316c85e5c5c7cd3fd1fdcd05e6d7487af233ce4709b4a848be4cd48");
+		outdated("Frog/model.obj", "15c9481f3193a0ae8dbc14c393aa6fb52b11482167178c37ff542a6275dbfba2");
+		outdated("Burger/model.obj", "489bde21511fa0999c04ec455467b3df329833b1b7f84e40944635b457351d7b");
+		outdated("Penguin/model.obj", "9da0dffe28dbf0f48648b2cbfc112d3883f1522a7fcd220b11216f1096ace338");
+		outdated("SpongeBob/model.obj", "c2bc7bfdabf74bc3bb6c09c9babec5c29279a0adbf7dad2c89b6e53d6f7d7569");
+		outdated("Skinny Alien/model.obj", "78c7e5f0ff25a730c593840a7bedfb96bdcabd8fd1f4484eeb8d17cbf9585ca6");
+		outdated("Blue/model.obj", "e0b99d7c604f6a41ca6f52daa95de3d4f5a8d8babe0ab71e3ddbd3183f2911ff");
 	}
 
 	/** Remembers SHA-256 hashes of older versions of an example file. */
@@ -139,6 +150,7 @@ public final class CharacterLibrary {
 
 	private static volatile List<PlayerCharacter> characters = List.of();
 	private static volatile Map<String, PlayerCharacter> byId = Map.of();
+	private static volatile Map<String, PlayerCharacter> byName = Map.of();
 	private static volatile List<String> problems = List.of();
 	private static final List<Identifier> registeredTextures = new ArrayList<>();
 	private static int generation;
@@ -157,6 +169,15 @@ public final class CharacterLibrary {
 
 	public static @Nullable PlayerCharacter get(@Nullable String id) {
 		return id == null ? null : byId.get(id);
+	}
+
+	/** A character by the name shown in menus (or else its id), upper or lower case. */
+	public static @Nullable PlayerCharacter byName(@Nullable String name) {
+		if (name == null) {
+			return null;
+		}
+		PlayerCharacter character = byName.get(name.strip().toLowerCase(Locale.ROOT));
+		return character != null ? character : byId.get(name.strip());
 	}
 
 	/** The same player always gets the same character, as long as the set of characters doesn't change. */
@@ -202,9 +223,14 @@ public final class CharacterLibrary {
 
 		loaded.sort(Comparator.comparing(c -> c.displayName().toLowerCase(Locale.ROOT)));
 		Map<String, PlayerCharacter> index = new HashMap<>();
-		loaded.forEach(c -> index.put(c.id(), c));
+		Map<String, PlayerCharacter> names = new HashMap<>();
+		loaded.forEach(c -> {
+			index.put(c.id(), c);
+			names.putIfAbsent(c.displayName().toLowerCase(Locale.ROOT), c);
+		});
 		characters = List.copyOf(loaded);
 		byId = Map.copyOf(index);
+		byName = Map.copyOf(names);
 		problems = List.copyOf(issues);
 		PlayerCharactersClient.LOGGER.info("Loaded {} character(s) from {}", loaded.size(), FOLDER);
 	}

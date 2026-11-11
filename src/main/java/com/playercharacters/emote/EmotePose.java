@@ -34,6 +34,8 @@ public final class EmotePose {
 	public float pivotY;
 	/** Lowers the whole character by this much of its hip height: 1 sits it on the ground. */
 	public float hipDrop;
+	/** The emote moves the legs itself (the Griddy, sitting), so they don't switch to walking when the player moves. */
+	public boolean ownLegs;
 	/** How far the mouth is open, 0 to 1. */
 	public float jaw;
 	/** The angry face of characters that have one. */
@@ -130,6 +132,7 @@ public final class EmotePose {
 		this.roll = other.roll;
 		this.pivotY = other.pivotY;
 		this.hipDrop = other.hipDrop;
+		this.ownLegs = other.ownLegs;
 		this.jaw = other.jaw;
 		this.mad = other.mad;
 		this.weight = other.weight;

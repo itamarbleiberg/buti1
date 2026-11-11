@@ -38,8 +38,14 @@ public final class FirstPersonHands {
 		-0.399F, 0.0F, -0.917F,
 		0.0F, -1.0F, 0.0F));
 
+	/** 3D characters' arms are drawn this much bigger in first person than they are on the character. */
+	public static final float ARM_SCALE = 1.6F;
+	/** And pushed this far (blocks) out along the arm, so more of the hand shows. */
+	private static final float ARM_REACH = 0.07F;
+
 	private static int armsDrawn;
 	private static int fingersDrawn;
+	private static int lastArmVertices;
 
 	private FirstPersonHands() {
 	}
@@ -66,7 +72,7 @@ public final class FirstPersonHands {
 		if (model == null) {
 			return false;
 		}
-		Part arm = model.part(side == HumanoidArm.RIGHT ? Bone.RIGHT_ARM : Bone.LEFT_ARM);
+		Part arm = firstPersonArm(model, side);
 		if (arm == null || arm.vertexCount() == 0) {
 			return true; // a character without arms has no arm to show
 		}
@@ -76,12 +82,26 @@ public final class FirstPersonHands {
 		// Like Minecraft's arm: from the shoulder, turned out a little, then to the hand at the bottom of the arm.
 		poseStack.translate(mirror * PLAYER_RIGHT_SHOULDER.x / 16.0F, PLAYER_RIGHT_SHOULDER.y / 16.0F, 0.0F);
 		poseStack.mulPose(new Quaternionf().rotationZ(mirror * 0.1F));
-		poseStack.translate(mirror * PLAYER_HAND_FROM_SHOULDER.x / 16.0F, PLAYER_HAND_FROM_SHOULDER.y / 16.0F, 0.0F);
+		poseStack.translate(mirror * PLAYER_HAND_FROM_SHOULDER.x / 16.0F, PLAYER_HAND_FROM_SHOULDER.y / 16.0F + ARM_REACH, 0.0F);
+		poseStack.scale(ARM_SCALE, ARM_SCALE, ARM_SCALE); // bigger than in third person, so the hand shows well
 		poseStack.translate(-hand.x, -hand.y, -hand.z);
 		CharacterModelRenderer.submitAlone(model, arm, poseStack, collector, light);
 		poseStack.popPose();
 		armsDrawn++;
+		lastArmVertices = arm.vertexCount();
 		return true;
+	}
+
+	/** The arm to show in first person: the detailed first-person one if the character has it. */
+	public static @Nullable Part firstPersonArm(CharacterModel model, HumanoidArm side) {
+		CharacterModel.FirstPerson firstPerson = model.extras().firstPerson();
+		Part detailed = side == HumanoidArm.RIGHT ? firstPerson.rightArm() : firstPerson.leftArm();
+		return detailed != null ? detailed : model.part(side == HumanoidArm.RIGHT ? Bone.RIGHT_ARM : Bone.LEFT_ARM);
+	}
+
+	/** How many vertices the last first-person arm had (the detailed arms have more). */
+	public static int lastArmVertices() {
+		return lastArmVertices;
 	}
 
 	/**
@@ -98,9 +118,11 @@ public final class FirstPersonHands {
 
 		CharacterModel model = modelOf(player);
 		if (model != null) {
-			Part arm = model.extras().middleFinger() != null ? model.extras().middleFinger() : model.part(Bone.RIGHT_ARM);
+			Part arm = model.extras().firstPerson().middleFinger() != null ? model.extras().firstPerson().middleFinger()
+				: model.extras().middleFinger() != null ? model.extras().middleFinger() : firstPersonArm(model, HumanoidArm.RIGHT);
 			if (arm != null) {
 				Vector3f hand = arm.hand() != null ? arm.hand() : arm.pivot();
+				poseStack.scale(ARM_SCALE, ARM_SCALE, ARM_SCALE);
 				poseStack.translate(-hand.x, -hand.y, -hand.z);
 				CharacterModelRenderer.submitAlone(model, arm, poseStack, collector, light);
 			}

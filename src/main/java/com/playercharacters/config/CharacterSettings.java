@@ -33,6 +33,7 @@ public final class CharacterSettings {
 	private volatile boolean middleFinger = true;
 	private volatile boolean emoteMusic = true;
 	private volatile boolean shareEmotes = true;
+	private volatile boolean othersPicks = true;
 	private volatile Choice defaultChoice = Choice.OWN_SKIN;
 
 	private CharacterSettings() {
@@ -51,7 +52,7 @@ public final class CharacterSettings {
 		this.save();
 	}
 
-	/** Whether saying (or typing) "fart" makes that player's character fart. */
+	/** Whether typing "fart" in chat makes that player's character fart (and whether farts show at all). */
 	public boolean fartDetection() {
 		return this.fartDetection;
 	}
@@ -61,7 +62,7 @@ public final class CharacterSettings {
 		this.save();
 	}
 
-	/** Whether saying (or typing) "fuck you" makes that player's character show the middle finger. */
+	/** Whether typing "fuck you" or "fuck off" in chat makes that player's character show the middle finger (and whether it shows at all). */
 	public boolean middleFinger() {
 		return this.middleFinger;
 	}
@@ -81,13 +82,26 @@ public final class CharacterSettings {
 		this.save();
 	}
 
-	/** Whether emotes from the emote wheel are also sent as a /me chat message, so other players with the mod see them. */
+	/**
+	 * Whether your emotes and your character are told to other players through chat (as /me messages), so that those
+	 * who have the mod see them.
+	 */
 	public boolean shareEmotes() {
 		return this.shareEmotes;
 	}
 
 	public void setShareEmotes(boolean enabled) {
 		this.shareEmotes = enabled;
+		this.save();
+	}
+
+	/** Whether players who have the mod are shown as the character they picked for themselves. */
+	public boolean othersPicks() {
+		return this.othersPicks;
+	}
+
+	public void setOthersPicks(boolean enabled) {
+		this.othersPicks = enabled;
 		this.save();
 	}
 
@@ -132,6 +146,7 @@ public final class CharacterSettings {
 			this.middleFinger = data.middleFinger;
 			this.emoteMusic = data.emoteMusic;
 			this.shareEmotes = data.shareEmotes;
+			this.othersPicks = data.othersPicks;
 			this.defaultChoice = Choice.decode(data.defaultCharacter, Choice.OWN_SKIN);
 			if (this.defaultChoice.kind() == Choice.Kind.DEFAULT) {
 				this.defaultChoice = Choice.OWN_SKIN;
@@ -162,6 +177,7 @@ public final class CharacterSettings {
 		data.middleFinger = this.middleFinger;
 		data.emoteMusic = this.emoteMusic;
 		data.shareEmotes = this.shareEmotes;
+		data.othersPicks = this.othersPicks;
 		data.defaultCharacter = this.defaultChoice.encode();
 		this.choices.entrySet().stream()
 			.sorted(Comparator.comparing(entry -> this.playerNames.getOrDefault(entry.getKey(), ""), String.CASE_INSENSITIVE_ORDER))
@@ -203,6 +219,7 @@ public final class CharacterSettings {
 		boolean middleFinger = true;
 		boolean emoteMusic = true;
 		boolean shareEmotes = true;
+		boolean othersPicks = true;
 		String defaultCharacter = "own";
 		Map<String, PlayerData> players = new LinkedHashMap<>();
 	}

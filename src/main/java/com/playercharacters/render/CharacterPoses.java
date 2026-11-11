@@ -8,14 +8,17 @@ import com.playercharacters.emote.EmotePose;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.HumanoidArm;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Changes to the player model's pose after Minecraft posed it: emotes, bending over to fart, the middle finger, and
- * the per-character head turning and waddling. 3D characters copy the player model's pose, and held items and armor
- * follow it, so changing the player model moves everything together.
+ * the per-character head turning, waddling, four-legged walking and rifle aiming. 3D characters copy the player
+ * model's pose, and held items and armor follow it, so changing the player model moves everything together.
  */
 public final class CharacterPoses {
 	/** How far the upper body leans forward when fully bent over, in radians (about 17 degrees). */
@@ -29,6 +32,10 @@ public final class CharacterPoses {
 	private static final Vector3f FEET = new Vector3f(0.0F, 1.501F, 0.0F);
 	/** The player renderer draws its model at 15/16 size. */
 	private static final float PLAYER_SCALE = 0.9375F;
+	/** Four-legged characters stand up on their back legs this far (radians) for emotes. */
+	public static final float REAR_UP = 1.2F;
+	/** How far the legs of a four-legged character swing as it trots, at full speed. */
+	private static final float TROT_STRIDE = 1.05F;
 	private static final float[] NO_TURN = new float[3];
 
 	private CharacterPoses() {
@@ -44,6 +51,54 @@ public final class CharacterPoses {
 		}
 	}
 
+	/**
+	 * Four legs: Minecraft posed a person, and this turns it into a trotting animal. The arms are the front legs and step
+	 * together with the opposite back leg. The body stays level when sneaking: the legs bend and the head goes down
+	 * instead, like an animal about to pounce. An attack is a swipe of a front paw.
+	 */
+	public static void fourLegs(PlayerModel model, AvatarRenderState state) {
+		for (ModelPart part : new ModelPart[] {model.head, model.body, model.rightArm, model.leftArm, model.rightLeg, model.leftLeg}) {
+			PartPose rest = part.getInitialPose();
+			part.x = rest.x();
+			part.y = rest.y();
+			part.z = rest.z();
+		}
+		model.body.setRotation(0.0F, 0.0F, 0.0F);
+		float position = state.walkAnimationPos;
+		float speed = state.walkAnimationSpeed / Math.max(0.01F, state.speedValue);
+		float swing = Mth.cos(position * 0.6662F) * TROT_STRIDE * speed;
+		model.rightArm.setRotation(-swing, 0.0F, 0.0F);
+		model.leftArm.setRotation(swing, 0.0F, 0.0F);
+		model.rightLeg.setRotation(swing, 0.0F, 0.0F);
+		model.leftLeg.setRotation(-swing, 0.0F, 0.0F);
+		if (state.isPassenger) {
+			// Sitting on its haunches.
+			model.rightLeg.xRot = -1.1F;
+			model.leftLeg.xRot = -1.1F;
+		}
+		if (state.attackTime > 0.0F) {
+			float swipe = Mth.sin(state.attackTime * Mth.PI);
+			ModelPart paw = state.attackArm == HumanoidArm.LEFT ? model.leftArm : model.rightArm;
+			paw.xRot -= swipe * 1.25F;
+			paw.zRot += (paw == model.rightArm ? 0.25F : -0.25F) * swipe;
+		}
+		if (state.isCrouching) {
+			model.rightArm.xRot -= 0.55F;
+			model.leftArm.xRot -= 0.55F;
+			model.rightLeg.xRot += 0.6F;
+			model.leftLeg.xRot += 0.6F;
+			model.head.xRot += 0.3F;
+		}
+	}
+
+	/** Both arms up in front, the right one holding the rifle, aimed wherever the player looks. */
+	public static void rifle(PlayerModel model) {
+		float pitch = Mth.clamp(model.head.xRot, -1.2F, 1.2F);
+		float yaw = model.head.yRot;
+		model.rightArm.setRotation(-Mth.HALF_PI + pitch, yaw, 0.0F);
+		model.leftArm.setRotation(-Mth.HALF_PI + pitch + 0.08F, yaw + 0.62F, 0.0F);
+	}
+
 	/** Raises the right arm toward the front. {@code raise} goes from 0 (down) to about 1. */
 	public static void middleFinger(PlayerModel model, float raise, float ageInTicks) {
 		ModelPart arm = model.rightArm;
@@ -53,8 +108,21 @@ public final class CharacterPoses {
 		arm.zRot -= arm.zRot * raise;
 	}
 
-	/** Bends the upper body forward around the hips, which pushes the butt out. {@code bend} goes from 0 to about 1. */
+	/**
+	 * Bends the upper body forward around the hips, which pushes the butt out. {@code bend} goes from 0 to about 1.
+	 * Four-legged characters squat instead: the back legs step under the body and the rump drops.
+	 */
 	public static void fartBend(PlayerModel model, @Nullable CharacterModel character, float bend) {
+		if (character != null && character.extras().fourLegs()) {
+			Quaternionf drop = new Quaternionf().rotationX(-0.14F * bend);
+			Vector3f shoulders = shoulders(character);
+			rotatePart(model.body, character, Bone.BODY, shoulders, drop);
+			turnPart(model.rightLeg, character, Bone.RIGHT_LEG, shoulders, drop);
+			turnPart(model.leftLeg, character, Bone.LEFT_LEG, shoulders, drop);
+			model.rightLeg.xRot -= 0.5F * bend;
+			model.leftLeg.xRot -= 0.5F * bend;
+			return;
+		}
 		float lean = bend * MAX_LEAN;
 		// In model space the front is -Z and Y points down, so turning around +X leans forward.
 		Quaternionf turn = new Quaternionf().rotationX(lean);
@@ -67,6 +135,16 @@ public final class CharacterPoses {
 		model.head.xRot += lean;
 		model.rightArm.xRot += lean;
 		model.leftArm.xRot += lean;
+	}
+
+	/** Model space: between the front legs' joints of a four-legged character. */
+	private static Vector3f shoulders(CharacterModel character) {
+		CharacterModel.Part right = character.part(Bone.RIGHT_ARM);
+		CharacterModel.Part left = character.part(Bone.LEFT_ARM);
+		if (right != null && left != null) {
+			return new Vector3f(right.pivot()).add(left.pivot()).mul(0.5F);
+		}
+		return new Vector3f(character.hip());
 	}
 
 	/** Rocks the whole character from side to side in step with its walking, like a penguin. */
@@ -85,27 +163,44 @@ public final class CharacterPoses {
 		}
 	}
 
+	/** How much an emote leaves the legs to walking: 0 standing still, 1 walking or running. */
+	public static float walking(float walkSpeed) {
+		return Mth.clamp((walkSpeed - 0.05F) * 2.5F, 0.0F, 1.0F);
+	}
+
 	/**
 	 * Poses the player model for an emote, blended with Minecraft's own pose by the emote's weight. The body turns around
-	 * the hips and takes the head and arms along.
+	 * the hips and takes the head and arms along. While the player walks, the legs keep walking (unless the emote moves
+	 * them itself, like the Griddy). Four-legged characters stand up on their back legs first, and use their front legs
+	 * as arms.
 	 */
-	public static void emote(PlayerModel model, @Nullable CharacterModel character, EmotePose pose) {
+	public static void emote(PlayerModel model, @Nullable CharacterModel character, EmotePose pose, float walkSpeed) {
 		float w = pose.weight;
 		float headTurn = character != null ? character.extras().headTurn() : 1.0F;
+		float legs = pose.ownLegs ? w : w * (1.0F - walking(walkSpeed));
 		blend(model.head, pose.head, headTurn, w);
 		blend(model.rightArm, pose.rightArm, 1.0F, w);
 		blend(model.leftArm, pose.leftArm, 1.0F, w);
-		blend(model.rightLeg, pose.rightLeg, 1.0F, w);
-		blend(model.leftLeg, pose.leftLeg, 1.0F, w);
+		blend(model.rightLeg, pose.rightLeg, 1.0F, legs);
+		blend(model.leftLeg, pose.leftLeg, 1.0F, legs);
 		blend(model.body, NO_TURN, 1.0F, w);
 		model.rightArm.y -= pose.shoulderLift * w;
 		model.leftArm.y -= pose.shoulderLift * w;
 		model.head.z -= pose.headForward * w;
+		Vector3f hip = character != null ? new Vector3f(character.hip()) : PLAYER_HIP;
+		if (character != null && character.extras().fourLegs()) {
+			// Up on the back legs: the body turns up around the hips, the head and front legs ride along without turning,
+			// so the head still looks ahead and the front legs hang down like arms.
+			Quaternionf up = new Quaternionf().rotationX(-REAR_UP * w);
+			rotatePart(model.body, character, Bone.BODY, hip, up);
+			turnPart(model.head, character, Bone.HEAD, hip, up);
+			turnPart(model.rightArm, character, Bone.RIGHT_ARM, hip, up);
+			turnPart(model.leftArm, character, Bone.LEFT_ARM, hip, up);
+		}
 		float[] body = pose.body;
 		if (body[0] != 0.0F || body[1] != 0.0F || body[2] != 0.0F) {
 			Quaternionf turn = new Quaternionf().rotationZYX((float) Math.toRadians(body[2] * w), (float) Math.toRadians(body[1] * w),
 				(float) Math.toRadians(body[0] * w));
-			Vector3f hip = character != null ? new Vector3f(character.hip()) : PLAYER_HIP;
 			rotatePart(model.body, character, Bone.BODY, hip, turn);
 			rotatePart(model.head, character, Bone.HEAD, hip, turn);
 			rotatePart(model.rightArm, character, Bone.RIGHT_ARM, hip, turn);
@@ -127,6 +222,25 @@ public final class CharacterPoses {
 			poseStack.mulPose(Axis.XP.rotationDegrees(-pose.pitch * w));
 			poseStack.mulPose(Axis.ZP.rotationDegrees(-pose.roll * w));
 			poseStack.translate(0.0F, -pose.pivotY, 0.0F);
+		}
+	}
+
+	/**
+	 * Four-legged characters are already lying flat, so swimming and gliding shouldn't tip them over like a person: this
+	 * takes back the player renderer's turn and leaves only a tilt toward where the player looks.
+	 */
+	public static void levelFourLegs(PoseStack poseStack, AvatarRenderState state) {
+		if (state.isFallFlying) {
+			float amount = state.fallFlyingScale();
+			if (!state.isAutoSpinAttack) {
+				poseStack.mulPose(Axis.XP.rotationDegrees(amount * 90.0F));
+			}
+		} else if (state.swimAmount > 0.0F) {
+			if (state.isVisuallySwimming) {
+				poseStack.translate(0.0F, 1.0F, -0.3F);
+			}
+			float turned = Mth.lerp(state.swimAmount, 0.0F, state.isInWater ? -90.0F - state.xRot : -90.0F);
+			poseStack.mulPose(Axis.XP.rotationDegrees(-turned));
 		}
 	}
 

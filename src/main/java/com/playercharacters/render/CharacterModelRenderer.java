@@ -6,10 +6,12 @@ import com.playercharacters.character.CharacterModel;
 import com.playercharacters.character.CharacterModel.Bone;
 import com.playercharacters.character.CharacterModel.Part;
 import com.playercharacters.character.PlayerCharacter;
+import com.playercharacters.emote.EmotePose;
 import java.util.Map;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.layers.CapeLayer;
 import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
@@ -65,6 +67,61 @@ public final class CharacterModelRenderer {
 			for (Map.Entry<Bone, Part> entry : extras.blinkParts().entrySet()) {
 				submitPart(model, entry.getKey(), entry.getValue(), playerModel, jawAngle, poseStack, collector, type, light, overlay, tint);
 			}
+		}
+		// Glowing eyes and markings: full brightness, even at night.
+		for (Map.Entry<Bone, Part> entry : extras.glowParts().entrySet()) {
+			if (entry.getKey() != Bone.RIGHT_ARM || !fingerUp) {
+				submitPart(model, entry.getKey(), entry.getValue(), playerModel, jawAngle, poseStack, collector, type, LightTexture.FULL_BRIGHT, overlay, tint);
+			}
+		}
+		if (!extras.tails().isEmpty() && playerModel.body.visible) {
+			submitTails(model, playerModel, tailMotion(state, model), poseStack, collector, type, light, overlay, tint);
+		}
+	}
+
+	/** How the tails sway for this player this frame: lazily, quicker while walking, wagging during emotes. */
+	public static TailMotion tailMotion(AvatarRenderState state, CharacterModel model) {
+		EmotePose emote = ((CharacterRenderState) state).playercharacters$emote();
+		float emoteWeight = emote == null ? 0.0F : emote.weight;
+		float lift = model.extras().fourLegs() ? CharacterPoses.REAR_UP * 0.85F * emoteWeight : 0.0F;
+		lift += 0.7F * ((CharacterRenderState) state).playercharacters$fart(); // out of the way
+		float seconds = (state.ageInTicks + (state.id & 255)) / 20.0F;
+		return TailMotion.of(seconds, state.walkAnimationSpeed, emoteWeight, lift);
+	}
+
+	/** Tails move with the body, then bend by themselves. */
+	private static void submitTails(CharacterModel model, PlayerModel playerModel, TailMotion motion, PoseStack poseStack, SubmitNodeCollector collector,
+		RenderType type, int light, int overlay, int tint) {
+		Part body = model.part(Bone.BODY);
+		poseStack.pushPose();
+		applyPose(poseStack, body != null ? body.pivot() : new Vector3f(), playerModel.body);
+		for (CharacterModel.Tail tail : model.extras().tails()) {
+			collector.submitCustomGeometry(poseStack, type, (pose, buffer) -> emitBent(tail.part(), tail, motion, pose, buffer, light, overlay, tint));
+			if (tail.glow() != null) {
+				collector.submitCustomGeometry(poseStack, type,
+					(pose, buffer) -> emitBent(tail.glow(), tail, motion, pose, buffer, LightTexture.FULL_BRIGHT, overlay, tint));
+			}
+		}
+		poseStack.popPose();
+	}
+
+	private static void emitBent(Part part, CharacterModel.Tail tail, TailMotion motion, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay,
+		int tint) {
+		Matrix4f matrix = pose.pose();
+		Vector3f p = new Vector3f();
+		Vector3f n = new Vector3f();
+		float[] v = part.vertices();
+		int[] colors = part.colors();
+		boolean tinted = tint != -1;
+		for (int i = 0, count = colors.length; i < count; i++) {
+			int o = i * 8;
+			p.set(v[o], v[o + 1], v[o + 2]);
+			n.set(v[o + 3], v[o + 4], v[o + 5]);
+			motion.bend(tail, p, n);
+			matrix.transformPosition(p);
+			pose.transformNormal(n.x, n.y, n.z, n);
+			int color = tinted ? ARGB.multiply(colors[i], tint) : colors[i];
+			buffer.addVertex(p.x, p.y, p.z, color, v[o + 6], v[o + 7], overlay, light, n.x, n.y, n.z);
 		}
 	}
 

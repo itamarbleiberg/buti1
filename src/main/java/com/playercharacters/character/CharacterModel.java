@@ -1,6 +1,8 @@
 package com.playercharacters.character;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.resources.Identifier;
 import org.joml.Vector3f;
@@ -24,6 +26,22 @@ public final class CharacterModel {
 		LEFT_LEG
 	}
 
+	/** How the character stands and walks. */
+	public enum Stance {
+		/** Like a person: arms swing as it walks. */
+		TWO_LEGS,
+		/** Like a dog: the arms are front legs and trot with the back legs. For emotes it stands up on its back legs. */
+		FOUR_LEGS
+	}
+
+	/** What the arms do when the character isn't doing anything else with them. */
+	public enum Arms {
+		/** Minecraft's own arm poses: swinging while walking, holding items, aiming bows. */
+		NORMAL,
+		/** Both arms up in front, holding a rifle that is part of the right arm, aimed wherever the player looks. */
+		RIFLE
+	}
+
 	/**
 	 * One rigid piece of the model. A part can have no vertices at all: then it only provides a joint
 	 * (for example a head joint that the jaw turns around).
@@ -45,6 +63,48 @@ public final class CharacterModel {
 	}
 
 	/**
+	 * A tail that sways on its own. It moves with the body, and bends more the further a point is from its base.
+	 *
+	 * @param part   the tail
+	 * @param glow   glowing bits of it (like a flame at the tip), bending the same way; or null
+	 * @param base   model space: where it grows out of the body
+	 * @param length how far its furthest point is from the base
+	 * @param tip    model space: its furthest point (where particles can come out)
+	 * @param index  0 for the first tail, 1 for the next...; each sways a little differently
+	 */
+	public record Tail(Part part, @Nullable Part glow, Vector3f base, float length, Vector3f tip, int index) {
+	}
+
+	/**
+	 * Particles that keep coming out of a character, like flames on a tail or mist at the feet.
+	 *
+	 * @param particle  a particle id such as "minecraft:soul_fire_flame", or "minecraft:dust" with {@code color}
+	 * @param color     RGB for dust particles
+	 * @param size      scale for dust particles
+	 * @param attachedTo what it moves with: a bone, or a tail ({@code tail} set)
+	 * @param tail      the tail it comes out of (its tip), or -1
+	 * @param at        model space: where it comes out
+	 * @param every     ticks between particles
+	 * @param when      when it shows
+	 * @param spread    blocks of random offset
+	 * @param velocity  blocks per tick: x toward the character's left, y up, z forward
+	 */
+	public record Emitter(String particle, int color, float size, Bone attachedTo, int tail, Vector3f at, int every, When when, float spread,
+		Vector3f velocity) {
+		public enum When {
+			ALWAYS,
+			MOVING,
+			SPRINTING,
+			STANDING_STILL
+		}
+	}
+
+	/** Detailed arms for first person, where they are seen up close. Any of them can be null. */
+	public record FirstPerson(@Nullable Part rightArm, @Nullable Part leftArm, @Nullable Part middleFinger) {
+		public static final FirstPerson NONE = new FirstPerson(null, null, null);
+	}
+
+	/**
 	 * Extras for the middle finger emote and other options, all optional.
 	 *
 	 * @param madParts       drawn only while the character is mad (an angry face), each following its bone
@@ -55,15 +115,31 @@ public final class CharacterModel {
 	 * @param smoke          model space: where smoke rises from (like the tip of a cigarette), moving with the head
 	 * @param blinkParts     closed eyelids, drawn for a moment every few seconds
 	 * @param bounce         how far (blocks) the character bobs up and down with each step
+	 * @param glowParts      parts that glow in the dark (eyes, markings), each following its bone
+	 * @param tails          tails that sway by themselves
+	 * @param stance         two legs or four
+	 * @param arms           what the arms do by default
+	 * @param hideHeldItems  whether items in the hands are left out (the hands are already holding something)
+	 * @param firstPerson    detailed arms for first person
+	 * @param particles      particles that keep coming out of it
 	 */
 	public record Extras(Map<Bone, Part> madParts, Map<Bone, Part> calmParts, @Nullable Part middleFinger, float waddleRadians, float headTurn,
-		@Nullable Vector3f smoke, Map<Bone, Part> blinkParts, float bounce) {
-		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null, Map.of(), 0.0F);
+		@Nullable Vector3f smoke, Map<Bone, Part> blinkParts, float bounce, Map<Bone, Part> glowParts, List<Tail> tails, Stance stance, Arms arms,
+		boolean hideHeldItems, FirstPerson firstPerson, List<Emitter> particles) {
+		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null, Map.of(), 0.0F, Map.of(), List.of(), Stance.TWO_LEGS,
+			Arms.NORMAL, false, FirstPerson.NONE, List.of());
 
 		public Extras {
 			madParts = madParts.isEmpty() ? Map.of() : new EnumMap<>(madParts);
 			calmParts = calmParts.isEmpty() ? Map.of() : new EnumMap<>(calmParts);
 			blinkParts = blinkParts.isEmpty() ? Map.of() : new EnumMap<>(blinkParts);
+			glowParts = glowParts.isEmpty() ? Map.of() : new EnumMap<>(glowParts);
+			tails = List.copyOf(tails);
+			particles = List.copyOf(particles);
+		}
+
+		public boolean fourLegs() {
+			return this.stance == Stance.FOUR_LEGS;
 		}
 	}
 
@@ -110,6 +186,11 @@ public final class CharacterModel {
 		return this;
 	}
 
+	/** The simplest copy, for small pictures like the emote wheel's. */
+	public CharacterModel simplest() {
+		return this.simpler.length == 0 ? this : this.simpler[this.simpler.length - 1];
+	}
+
 	/** Makes the simpler copies used far away. Called once, when the character is loaded. */
 	void makeSimplerCopies() {
 		CharacterModel[] copies = new CharacterModel[ModelDetail.CELLS.length];
@@ -123,9 +204,16 @@ public final class CharacterModel {
 		Map<Bone, Part> parts = new EnumMap<>(Bone.class);
 		this.parts.forEach((bone, part) -> parts.put(bone, ModelDetail.simplify(part, cell)));
 		Extras e = this.extras;
+		List<Tail> tails = new ArrayList<>();
+		for (Tail tail : e.tails()) {
+			tails.add(new Tail(ModelDetail.simplify(tail.part(), cell), tail.glow() == null ? null : ModelDetail.simplify(tail.glow(), cell), tail.base(),
+				tail.length(), tail.tip(), tail.index()));
+		}
+		// Far away nobody sees first-person arms, so the simpler copies don't keep them.
 		Extras extras = new Extras(simplify(e.madParts(), cell), simplify(e.calmParts(), cell),
 			e.middleFinger() == null ? null : ModelDetail.simplify(e.middleFinger(), cell), e.waddleRadians(), e.headTurn(), e.smoke(),
-			simplify(e.blinkParts(), cell), e.bounce());
+			simplify(e.blinkParts(), cell), e.bounce(), simplify(e.glowParts(), cell), tails, e.stance(), e.arms(), e.hideHeldItems(), FirstPerson.NONE,
+			e.particles());
 		return new CharacterModel(parts, this.texture, this.jawOpenRadians, this.hip, this.butt, this.height, extras);
 	}
 
@@ -159,19 +247,19 @@ public final class CharacterModel {
 		return this.extras;
 	}
 
+	/** Every polygon drawn in third person (first-person arms not included). */
 	public int quadCount() {
 		int quads = 0;
 		for (Part part : this.parts.values()) {
 			quads += part.vertexCount() / 4;
 		}
-		for (Part part : this.extras.madParts().values()) {
-			quads += part.vertexCount() / 4;
+		for (Map<Bone, Part> parts : List.of(this.extras.madParts(), this.extras.calmParts(), this.extras.blinkParts(), this.extras.glowParts())) {
+			for (Part part : parts.values()) {
+				quads += part.vertexCount() / 4;
+			}
 		}
-		for (Part part : this.extras.calmParts().values()) {
-			quads += part.vertexCount() / 4;
-		}
-		for (Part part : this.extras.blinkParts().values()) {
-			quads += part.vertexCount() / 4;
+		for (Tail tail : this.extras.tails()) {
+			quads += tail.part().vertexCount() / 4 + (tail.glow() == null ? 0 : tail.glow().vertexCount() / 4);
 		}
 		if (this.extras.middleFinger() != null) {
 			quads += this.extras.middleFinger().vertexCount() / 4;
