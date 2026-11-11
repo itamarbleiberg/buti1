@@ -1,0 +1,19 @@
+{
+	"fart": {
+		"sounds": [
+			"playercharacters:fart1",
+			"playercharacters:fart2",
+			"playercharacters:fart3"
+		],
+		"subtitle": "subtitles.playercharacters.fart"
+	},
+	"emote_music": {
+		"sounds": [
+			{
+				"name": "fabric-sound-api-v1:empty",
+				"stream": true,
+				"attenuation_distance": 32
+			}
+		]
+	}
+}

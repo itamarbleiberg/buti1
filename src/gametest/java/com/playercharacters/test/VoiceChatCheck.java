@@ -13,9 +13,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client,
- * for all three ways voice arrives: a nearby entity, a static (group-style) channel, and yourself.
- * Only loaded when Simple Voice Chat is installed.
+ * Plays audio through the real Simple Voice Chat server and checks that it reaches this mod on the client, for all three
+ * ways voice arrives: a nearby entity, a static (group-style) channel, and yourself. Only loaded when Simple Voice Chat
+ * is installed.
  */
 @SuppressWarnings("UnstableApiUsage")
 final class VoiceChatCheck {
@@ -83,6 +83,10 @@ final class VoiceChatCheck {
 		ownVoice.stopPlaying();
 		context.waitFor(client -> !TalkTracker.isMouthOpen(self), TIMEOUT_TICKS);
 		PlayerCharactersClientGameTest.check(true, "mouth closed again after the voice stopped");
+	}
+
+	private static void check(boolean condition, String what) {
+		PlayerCharactersClientGameTest.check(condition, what);
 	}
 
 	/** Plays a steady tone for {@code frames} x 20 ms through a voice chat channel. */

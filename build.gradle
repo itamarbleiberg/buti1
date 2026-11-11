@@ -8,6 +8,7 @@ base {
 }
 
 repositories {
+	mavenCentral()
 	maven {
 		name = 'Simple Voice Chat'
 		url = 'https://maven.maxhenkel.de/repository/public'

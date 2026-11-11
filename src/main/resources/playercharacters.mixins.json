@@ -6,7 +6,10 @@
 		"AbstractClientPlayerMixin",
 		"AvatarRendererMixin",
 		"AvatarRenderStateMixin",
-		"LivingEntityRendererMixin"
+		"ItemInHandRendererMixin",
+		"LivingEntityRendererMixin",
+		"PlayerModelMixin",
+		"SingleQuadParticleAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

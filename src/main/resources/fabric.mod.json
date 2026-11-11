@@ -3,7 +3,7 @@
 	"id": "playercharacters",
 	"version": "${version}",
 	"name": "Player Characters",
-	"description": "Shows players on a server as characters you make yourself. Their mouths move when they talk in Simple Voice Chat. Press K to choose who is which character.",
+	"description": "Shows players on a server as 3D characters or skins. Their mouths move when they talk in Simple Voice Chat, B opens an emote wheel with 32 emotes you can do while walking (arms bend at the elbows and hands make shapes with their fingers), and players who have the mod see each other's characters. Press K to choose who is which character.",
 	"icon": "assets/playercharacters/icon.png",
 	"environment": "client",
 	"entrypoints": {

@@ -4,8 +4,11 @@ import com.playercharacters.character.CharacterLibrary;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.config.CharacterSettings;
 import com.playercharacters.config.Choice;
+import com.playercharacters.share.CharacterSharing;
 import com.playercharacters.voice.TalkTracker;
 import java.util.UUID;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.PlayerSkin;
 import org.jspecify.annotations.Nullable;
 
@@ -20,13 +23,40 @@ public final class CharacterResolver {
 	private CharacterResolver() {
 	}
 
-	/** The character this player currently appears as, or null for their own skin. */
+	/**
+	 * The character this player currently appears as, or null for their own skin. Players who have the mod and picked
+	 * a character for themselves appear as that one (unless "Their own picks" is turned off, or we don't have it).
+	 */
 	public static @Nullable PlayerCharacter characterFor(UUID player) {
 		Preview active = preview;
 		if (active != null && active.player.equals(player)) {
 			return active.character;
 		}
-		return resolve(CharacterSettings.get().choiceFor(player), player);
+		CharacterSettings settings = CharacterSettings.get();
+		if (settings.othersPicks() && !isSelf(player)) {
+			CharacterSharing.Look look = CharacterSharing.lookOf(player);
+			if (look != null) {
+				if (look.ownSkin()) {
+					return null;
+				}
+				PlayerCharacter picked = CharacterSharing.characterOf(look);
+				if (picked != null) {
+					return picked;
+				}
+				// A character we don't have: show what we picked for them instead.
+			}
+		}
+		return resolve(settings.choiceFor(player), player);
+	}
+
+	/** What you picked for yourself (or the default gave you), which is what other players with the mod are told. */
+	public static @Nullable PlayerCharacter ownPick(UUID self) {
+		return resolve(CharacterSettings.get().choiceFor(self), self);
+	}
+
+	private static boolean isSelf(UUID player) {
+		LocalPlayer self = Minecraft.getInstance().player;
+		return self != null && self.getUUID().equals(player);
 	}
 
 	/** What {@code choice} means for {@code player}. {@link Choice#DEFAULT} follows the default setting. */

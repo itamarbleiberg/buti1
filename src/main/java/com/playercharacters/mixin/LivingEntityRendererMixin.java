@@ -5,6 +5,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.render.CharacterModelRenderer;
+import com.playercharacters.render.VanillaArms;
+import com.playercharacters.render.VanillaEmoteParts;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.player.PlayerModel;
@@ -24,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * For players shown as characters: draws the 3D model instead of the player model, and leaves out their armor.
  * The name tag is drawn later by the entity renderer and is not affected. Held items stay, moved to the
- * character's hands.
+ * character's hands. Players drawn with the normal model get a finger and eyebrows for the middle finger emote.
  */
 @Mixin(LivingEntityRenderer.class)
 public abstract class LivingEntityRendererMixin {
@@ -51,6 +53,10 @@ public abstract class LivingEntityRendererMixin {
 			CharacterModelRenderer.submit(character.model(), playerModel, avatarState, poseStack, collector, light, overlay, tint);
 		} else {
 			original.call(collector, model, state, poseStack, renderType, light, overlay, tint, sprite, outlineColor, crumbling);
+			if (this.model instanceof PlayerModel playerModel && state instanceof AvatarRenderState avatarState) {
+				VanillaEmoteParts.submit(playerModel, avatarState, poseStack, collector, light, overlay);
+				VanillaArms.submit(playerModel, avatarState, poseStack, collector, light, overlay);
+			}
 		}
 	}
 
@@ -76,8 +82,11 @@ public abstract class LivingEntityRendererMixin {
 			if (CharacterModelRenderer.isAttachedToPlayerBody(layer)) {
 				return;
 			}
-			if (layer instanceof ItemInHandLayer<?, ?> && this.model instanceof PlayerModel playerModel) {
-				CharacterModelRenderer.withHandsAtCharacter(character.model(), playerModel,
+			if (layer instanceof ItemInHandLayer<?, ?> && character.model().extras().hideHeldItems()) {
+				return; // the hands are already holding something (like a rifle), or they are paws
+			}
+			if (layer instanceof ItemInHandLayer<?, ?> && this.model instanceof PlayerModel playerModel && state instanceof AvatarRenderState avatarState) {
+				CharacterModelRenderer.withHandsAtCharacter(character.model(), playerModel, avatarState,
 					() -> original.call(layer, poseStack, collector, light, state, yRot, xRot));
 				return;
 			}
