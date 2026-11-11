@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.render.CharacterModelRenderer;
+import com.playercharacters.render.VanillaArms;
 import com.playercharacters.render.VanillaEmoteParts;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.Model;
@@ -54,6 +55,7 @@ public abstract class LivingEntityRendererMixin {
 			original.call(collector, model, state, poseStack, renderType, light, overlay, tint, sprite, outlineColor, crumbling);
 			if (this.model instanceof PlayerModel playerModel && state instanceof AvatarRenderState avatarState) {
 				VanillaEmoteParts.submit(playerModel, avatarState, poseStack, collector, light, overlay);
+				VanillaArms.submit(playerModel, avatarState, poseStack, collector, light, overlay);
 			}
 		}
 	}
@@ -83,8 +85,8 @@ public abstract class LivingEntityRendererMixin {
 			if (layer instanceof ItemInHandLayer<?, ?> && character.model().extras().hideHeldItems()) {
 				return; // the hands are already holding something (like a rifle), or they are paws
 			}
-			if (layer instanceof ItemInHandLayer<?, ?> && this.model instanceof PlayerModel playerModel) {
-				CharacterModelRenderer.withHandsAtCharacter(character.model(), playerModel,
+			if (layer instanceof ItemInHandLayer<?, ?> && this.model instanceof PlayerModel playerModel && state instanceof AvatarRenderState avatarState) {
+				CharacterModelRenderer.withHandsAtCharacter(character.model(), playerModel, avatarState,
 					() -> original.call(layer, poseStack, collector, light, state, yRot, xRot));
 				return;
 			}

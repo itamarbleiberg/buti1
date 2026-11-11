@@ -35,7 +35,8 @@ For the middle finger emote, a model can also have (all optional):
   middle_finger   a right arm with the middle finger up, used instead of right_arm
                   during the emote. Model it hanging down like right_arm, with the
                   finger pointing forward: the arm is raised to point forward, which
-                  turns the finger up.
+                  turns the finger up. You don't need it if the right hand has
+                  fingers (see below): then the hand's own fingers make the gesture.
   blink_head      closed eyelids, shown for a moment every few seconds so the
                   character blinks. Any part works: blink_jaw, blink_body...
 
@@ -51,6 +52,18 @@ More optional objects:
   fp_right_arm    a more detailed right arm, only drawn in first person (also
                   fp_left_arm and fp_middle_finger). Without them, the normal
                   arms are used.
+  right_index     fingers that curl: right_thumb, right_index, right_middle,
+                  right_ring and right_little (or right_pinky), and the same with
+                  left_. Each finger is its own object and moves with the hand. A
+                  hand can have fewer, like a cartoon glove without a ring finger.
+                  Emotes curl them into fists, pointing, rock horns and so on.
+                  fp_right_index and the others are their first-person versions.
+  right_hand      something held in the hand that moves with it as a whole, like
+                  the White Queen's rifle (also left_hand). glow_right_hand glows,
+                  and fp_right_hand is its first-person version.
+
+Arms bend at the elbow in emotes. The arm's surface bends over a short stretch around
+the elbow, so it doesn't tear, and the forearm twists toward the wrist.
 
 Far away, the mod draws a simpler copy of each model with fewer polygons, so many
 detailed characters don't slow the game down.
@@ -64,8 +77,11 @@ character.json, for example:
     "jaw_angle": 32,
     "butt": [0, 0.95, -0.09],
     "parts": {
-      "jaw": { "pivot": [0, 1.705, 0] },
-      "right_arm": { "pivot": [-0.185, 1.415, -0.01], "hand": [-0.232, 0.715, 0.088] }
+      "jaw": { "pivot": [0, 1.683, 0.171] },
+      "right_arm": { "pivot": [-0.185, 1.404, 0.093], "hand": [-0.232, 0.704, 0.191],
+                     "elbow": [-0.215, 1.074, 0.103], "wrist": [-0.226, 0.774, 0.148] },
+      "right_index": { "pivot": [-0.228, 0.701, 0.176], "tip": [-0.232, 0.555, 0.205],
+                       "curl": [1, 0, 0] }
     }
   }
 
@@ -83,8 +99,9 @@ character.json, for example:
   head_turn  how much of the player's looking around the head copies, from 0 (the
              head stays still) to 1 (all of it, the default). SpongeBob uses 0.3,
              because his whole sponge is his head.
-  smoke      where a thin line of smoke rises from, moving with the head, like the
-             tip of the Penguin's cigarette (optional)
+  smoke      where smoke rises from, moving with the head, like the tip of the
+             Penguin's cigarette: a thin gray plume, and a puff every few seconds
+             (optional)
   bounce     how far (in blocks) the character bobs up and down with each step
              while walking, e.g. 0.05 (default 0: no bobbing)
   parts      "pivot" is the joint a part turns around, "hand" is where held items go.
@@ -92,13 +109,24 @@ character.json, for example:
              from the size of each part. A part can have a pivot without being in the
              model: the Burger has no "head" object, only a head pivot, so its top bun
              (its "jaw") turns with the head.
+             Arms can also have "elbow" (the elbow joint) and "wrist" (where the
+             forearm ends and its twist stops). Without them, the elbow is guessed
+             about halfway down the arm. The forearm bends toward the front.
+             Fingers have "pivot" (the knuckle), "tip" and "curl" (the direction
+             the tip moves when the finger curls, toward the palm). Optional:
+             "joints" (where it bends, as fractions of its length from the
+             knuckle; default [0, 0.44, 0.74], or [0, 0.5] for a thumb), "angles"
+             (degrees each joint bends in a fist; default [75, 95, 65], or
+             [40, 55] for a thumb) and "rigid" (true bends sharply at the joints,
+             like the Robot's grippers, instead of over a short stretch).
   stance     "four_legs" for animals, like the Black Wolf. Then right_arm and
              left_arm are the front legs and right_leg and left_leg the back legs
              (front_right_leg, back_left_leg... work as names too). They trot in
              diagonal pairs, and for emotes the character stands up on its back legs.
              (default "two_legs")
   arms       "rifle" holds both arms out where the player looks, like the White
-             Queen aiming her rifle. Model the rifle as part of right_arm.
+             Queen aiming her rifle. Model the rifle as part of right_arm, or
+             as right_hand.
              (default "normal")
   hide_held_items
              true doesn't show the items the player holds (the queen's hands are
@@ -163,7 +191,10 @@ EMOTES
 ------
 The emote wheel (B by default) has 32 emotes, from the Default Dance and the 67 to the
 Floss, the Griddy, the Robot and push-ups. Point the mouse at one or scroll to it, then
-click. You can walk, run and jump while doing an emote; sneaking stops it. Dances play a
+click. You can walk, run and jump while doing an emote; sneaking stops it. Arms bend at
+the elbows in emotes, also for normal skins (a player wearing a chestplate keeps straight
+arms, because the armor can't bend), and the 3D characters' fingers make fists, point
+and show rock horns. Dances play a
 little note block tune, or your own music: put .ogg files named after the emotes in the
 "music" folder next to this one (the "Music folder" button in the character menu).
 
@@ -172,9 +203,10 @@ character fart, and "fuck you" or "fuck off" makes it show the middle finger and
 for a few seconds. This works for every character, and for players in their own skin. Turn
 them off with the "Farts" and "Middle finger" buttons in the character menu.
 
-In first person you see your 3D character's own arm. When you show the middle finger,
-your fist comes up in front of you, and when you fart, your screen turns green and
-bubbles pop.
+In first person you see your 3D character's own arm, with relaxed fingers that move a
+little and close into a fist when you punch. When you show the middle finger, your hand
+comes up in front of you, palm toward you, and when you fart, your screen turns green
+and bubbles pop.
 
 Players who have this mod see your character and your emotes: they are told through /me
 chat messages, like "* Steve is playing as Black Wolf" and "* Steve does the Default

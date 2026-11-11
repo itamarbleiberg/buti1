@@ -2,6 +2,7 @@ package com.playercharacters.mixin;
 
 import com.playercharacters.character.PlayerCharacter;
 import com.playercharacters.emote.EmotePose;
+import com.playercharacters.render.ArmPose;
 import com.playercharacters.render.CharacterRenderState;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import org.jspecify.annotations.Nullable;
@@ -25,6 +26,15 @@ public abstract class AvatarRenderStateMixin implements CharacterRenderState {
 	private @Nullable EmotePose playercharacters$emote;
 	@Unique
 	private boolean playercharacters$blink;
+	@Unique
+	private final ArmPose playercharacters$rightArm = new ArmPose();
+	@Unique
+	private final ArmPose playercharacters$leftArm = new ArmPose();
+
+	@Override
+	public ArmPose playercharacters$arm(boolean right) {
+		return right ? this.playercharacters$rightArm : this.playercharacters$leftArm;
+	}
 
 	@Override
 	public @Nullable PlayerCharacter playercharacters$character() {

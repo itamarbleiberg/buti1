@@ -40,4 +40,7 @@ public interface CharacterRenderState {
 	@Nullable EmotePose playercharacters$emote();
 
 	void playercharacters$setEmote(@Nullable EmotePose pose);
+
+	/** How the right (or left) arm's elbow and fingers are bent this frame. Set when the player model is posed. */
+	ArmPose playercharacters$arm(boolean right);
 }

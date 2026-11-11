@@ -8,7 +8,8 @@
 		"AvatarRenderStateMixin",
 		"ItemInHandRendererMixin",
 		"LivingEntityRendererMixin",
-		"PlayerModelMixin"
+		"PlayerModelMixin",
+		"SingleQuadParticleAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

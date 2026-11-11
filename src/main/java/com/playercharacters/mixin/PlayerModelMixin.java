@@ -40,7 +40,7 @@ public abstract class PlayerModelMixin {
 		}
 		float raise = characterState.playercharacters$middleFinger();
 		if (raise > 0.0F) {
-			CharacterPoses.middleFinger(model, raise, state.ageInTicks);
+			CharacterPoses.middleFinger(model, raise, state.ageInTicks, characterModel != null && characterModel.extras().fingerGesture());
 		}
 		float bend = characterState.playercharacters$fart();
 		if (bend > 0.0F) {
@@ -49,5 +49,6 @@ public abstract class PlayerModelMixin {
 		if (characterModel != null) {
 			CharacterPoses.waddle(model, characterModel, state.walkAnimationPos, state.walkAnimationSpeed);
 		}
+		CharacterPoses.arms(model, state, characterModel);
 	}
 }

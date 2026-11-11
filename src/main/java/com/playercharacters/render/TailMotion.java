@@ -33,6 +33,70 @@ public record TailMotion(float time, float speed, float side, float upDown, floa
 		return new TailMotion(seconds, speed, side, upDown, lift + 0.12F * walk);
 	}
 
+	/** Steps along a tail at which its bend is worked out once per frame; points in between share the nearest two. */
+	private static final int STEPS = 32;
+
+	/**
+	 * This frame's bend of one tail, worked out at {@value #STEPS} steps from base to tip: much quicker than working it out
+	 * for every corner (a bushy tail has thousands).
+	 */
+	public Table table(Tail tail) {
+		float[] turns = new float[(STEPS + 1) * 4];
+		float phase = tail.index() * 2.1F;
+		for (int k = 0; k <= STEPS; k++) {
+			float t = (float) k / STEPS;
+			float wave = this.time * this.speed + phase - 2.4F * t;
+			float yaw = this.side * (float) Math.pow(t, 1.25) * Mth.sin(wave);
+			float pitch = (this.upDown * Mth.sin(wave * 0.7F + 1.3F + phase) + this.lift) * t;
+			turns[k * 4] = Mth.cos(pitch);
+			turns[k * 4 + 1] = Mth.sin(pitch);
+			turns[k * 4 + 2] = Mth.cos(yaw);
+			turns[k * 4 + 3] = Mth.sin(yaw);
+		}
+		return new Table(tail.base(), 1.0F / tail.length(), turns);
+	}
+
+	/** One tail's bend this frame (see {@link #table}). */
+	public static final class Table {
+		private final Vector3f base;
+		private final float inverseLength;
+		/** Per step: cos and sin of the up-and-down turn, then of the side-to-side turn. */
+		private final float[] turns;
+
+		Table(Vector3f base, float inverseLength, float[] turns) {
+			this.base = base;
+			this.inverseLength = inverseLength;
+			this.turns = turns;
+		}
+
+		/** Bends one point of the tail and its normal, in place. */
+		public void bend(Vector3f point, Vector3f normal) {
+			Vector3f base = this.base;
+			float dx = point.x - base.x;
+			float dy = point.y - base.y;
+			float dz = point.z - base.z;
+			float x = Math.min(1.0F, (float) Math.sqrt(dx * dx + dy * dy + dz * dz) * this.inverseLength) * STEPS;
+			int k = Math.min(STEPS - 1, (int) x);
+			float f = x - k;
+			float[] r = this.turns;
+			int o = k * 4;
+			float cp = r[o] + (r[o + 4] - r[o]) * f;
+			float sp = r[o + 1] + (r[o + 5] - r[o + 1]) * f;
+			float cy = r[o + 2] + (r[o + 6] - r[o + 2]) * f;
+			float sy = r[o + 3] + (r[o + 7] - r[o + 3]) * f;
+			// Up and down first (around x), then from side to side (around the body's up axis).
+			float y1 = dy * cp - dz * sp;
+			float z1 = dy * sp + dz * cp;
+			point.set(base.x + dx * cy + z1 * sy, base.y + y1, base.z - dx * sy + z1 * cy);
+			float nx = normal.x;
+			float ny = normal.y;
+			float nz = normal.z;
+			float ny1 = ny * cp - nz * sp;
+			float nz1 = ny * sp + nz * cp;
+			normal.set(nx * cy + nz1 * sy, ny1, -nx * sy + nz1 * cy);
+		}
+	}
+
 	/** Bends one point of a tail. {@code normal} is turned the same way. Both are changed in place. */
 	public void bend(Tail tail, Vector3f point, Vector3f normal) {
 		Vector3f base = tail.base();

@@ -23,6 +23,7 @@ import com.playercharacters.effects.FartScreen;
 import com.playercharacters.effects.MiddleFingerEmote;
 import com.playercharacters.gui.CharacterMenuScreen;
 import com.playercharacters.gui.CharacterPickerScreen;
+import com.playercharacters.render.CharacterModelRenderer;
 import com.playercharacters.render.CharacterRenderState;
 import com.playercharacters.render.FirstPersonHands;
 import com.playercharacters.voice.TalkTracker;
@@ -30,8 +31,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -53,6 +56,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -91,8 +95,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			context.runOnClient(client -> VoiceChatCheck.finishOnboarding());
 		}
 
-		if (System.getProperty("playercharacters.test.quick") != null) {
-			quickLook(context);
+		String quick = System.getProperty("playercharacters.test.quick");
+		if (quick != null) {
+			switch (quick) {
+				case "bench" -> benchmark(context);
+				case "emotes" -> emoteSheet(context);
+				default -> quickLook(context);
+			}
 			return;
 		}
 		checkExamples(context);
@@ -115,6 +124,10 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		String v6jar = System.getProperty("playercharacters.test.v6jar");
 		if (v6jar != null) {
 			checkUpgradeFromOlder(context, Path.of(v6jar), 6);
+		}
+		String v7jar = System.getProperty("playercharacters.test.v7jar");
+		if (v7jar != null) {
+			checkUpgradeFromOlder(context, Path.of(v7jar), 7);
 		}
 		addSkinCharacter(context);
 
@@ -271,10 +284,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				client.options.fov().set(20);
 				client.player.setXRot(6.0F);
 			});
+			int fromTip = context.computeOnClient(client -> CigaretteSmoke.fromDrawnTipCount());
 			context.waitTicks(40);
-			check(context.computeOnClient(client -> CigaretteSmoke.puffCount()) > puffs + 5, "smoke rises from the penguin's cigarette");
+			check(context.computeOnClient(client -> CigaretteSmoke.puffCount()) > puffs + 10, "smoke rises from the penguin's cigarette");
+			check(context.computeOnClient(client -> CigaretteSmoke.fromDrawnTipCount()) > fromTip + 5, "the smoke comes out where the cigarette is drawn");
 			context.takeScreenshot("49-friend-penguin-smoking");
 			context.runOnClient(client -> client.options.fov().set(40));
+			checkElbowsAndFingers(context);
 
 			// Emotes on the friend: 3D characters and a skin, with music for the dances.
 			context.runOnClient(client -> client.player.setXRot(8.0F));
@@ -461,6 +477,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				if (model) {
 					int detailed = CharacterLibrary.get(id).model().extras().firstPerson().rightArm().vertexCount();
 					check(context.computeOnClient(client -> FirstPersonHands.lastArmVertices()) == detailed, "in first person, " + id + "'s arm is the detailed one");
+					float relaxed = context.computeOnClient(client -> FirstPersonHands.lastHandPose().curl[2]);
+					context.runOnClient(client -> client.player.swing(InteractionHand.MAIN_HAND));
+					context.waitTicks(2);
+					float punching = context.computeOnClient(client -> FirstPersonHands.lastHandPose().curl[2]);
+					check(relaxed > 0.0F && relaxed < 0.4F && punching > 0.8F, "in first person, " + id + "'s hand is relaxed (" + relaxed + ") and punches with a fist ("
+						+ punching + ")");
+					context.waitTicks(6);
 				}
 				context.takeScreenshot(String.format("%02d-first-person-%s-arm", shot++, id.toLowerCase().replace(' ', '-')));
 				int fingers = context.computeOnClient(client -> FirstPersonHands.fingersDrawn());
@@ -576,12 +599,199 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 				context.runOnClient(client -> CharacterSettings.get().setChoice(self, client.getUser().getName(), Choice.character(id)));
 				context.waitTicks(4);
 				context.takeScreenshot("q-" + id.toLowerCase().replace(' ', '-') + "-arm");
+				context.runOnClient(client -> client.player.swing(InteractionHand.MAIN_HAND));
+				context.waitTicks(2);
+				context.takeScreenshot("q-" + id.toLowerCase().replace(' ', '-') + "-punch");
+				context.waitTicks(6);
 				context.runOnClient(client -> MiddleFingerEmote.start(self));
 				context.waitTicks(8);
 				context.takeScreenshot("q-" + id.toLowerCase().replace(' ', '-') + "-finger");
 				context.waitTicks(56);
 			}
 		}
+	}
+
+	/**
+	 * With -Dplayercharacters.test.quick=emotes: screenshots of emotes on the friend, for checking how they look. The
+	 * environment variables PC_CHARS (characters, comma separated, "Tester" for a skin), PC_EMOTES (emote ids, or "all")
+	 * and PC_TURN (degrees the friend turns away) choose what; each picture is taken at the emote's picture moment
+	 * (its icon time), or PC_AT seconds in.
+	 */
+	private static void emoteSheet(ClientGameTestContext context) {
+		String chars = System.getenv().getOrDefault("PC_CHARS", "Alien");
+		String emotes = System.getenv().getOrDefault("PC_EMOTES", "all");
+		float turn = Float.parseFloat(System.getenv().getOrDefault("PC_TURN", "30"));
+		String at = System.getenv("PC_AT");
+		addSkinCharacter(context);
+		try (TestSingleplayerContext world = context.worldBuilder().create()) {
+			world.getServer().runCommand("time set noon");
+			world.getServer().runCommand("weather clear");
+			world.getClientWorld().waitForChunksRender();
+			context.runOnClient(client -> {
+				client.options.fov().set(50);
+				client.options.hideGui = true;
+				client.player.setXRot(6.0F);
+			});
+			context.runOnClient(PlayerCharactersClientGameTest::spawnFriend);
+			context.runOnClient(client -> {
+				Player friend = client.level.getPlayerByUUID(FRIEND);
+				for (EquipmentSlot slot : EquipmentSlot.values()) {
+					friend.setItemSlot(slot, ItemStack.EMPTY);
+				}
+			});
+			context.waitTicks(10);
+			List<Emote> list = emotes.equals("all") ? Emotes.all() : Arrays.stream(emotes.split(",")).map(id -> Emotes.byId(id.strip())).toList();
+			for (String id : chars.split(",")) {
+				String character = id.strip();
+				setChoice(context, character.equals("own") ? Choice.OWN_SKIN : Choice.character(character));
+				for (Emote emote : list) {
+					if (emote.kind() == Emote.Kind.FART) {
+						continue;
+					}
+					context.runOnClient(client -> {
+						client.particleEngine.clearParticles();
+						turnFriend(client, turn);
+						if (emote.kind() == Emote.Kind.MIDDLE_FINGER) {
+							MiddleFingerEmote.start(FRIEND);
+						} else {
+							EmotePlayer.start(client.level.getPlayerByUUID(FRIEND), emote);
+						}
+					});
+					context.waitTicks(Math.max(8, Math.round((at != null ? Float.parseFloat(at) : emote.iconTime()) * 20.0F)));
+					context.takeScreenshot("e-" + character.toLowerCase(Locale.ROOT).replace(' ', '-') + "-" + emote.id());
+					context.runOnClient(client -> EmotePlayer.stop(FRIEND));
+					context.waitTicks(10);
+				}
+			}
+		}
+	}
+
+	/**
+	 * With -Dplayercharacters.test.quick=bench: how much drawing each character costs. The friend stands 3 blocks in front
+	 * of us as each character in turn; prints the corners written per frame, the time our code spends writing them, and
+	 * the frame rate.
+	 */
+	private static void benchmark(ClientGameTestContext context) {
+		try (TestSingleplayerContext world = context.worldBuilder().create()) {
+			world.getServer().runCommand("time set noon");
+			world.getServer().runCommand("weather clear");
+			world.getClientWorld().waitForChunksRender();
+			context.runOnClient(client -> {
+				client.options.fov().set(70);
+				client.options.framerateLimit().set(260);
+				client.options.enableVsync().set(false);
+				client.options.inactivityFpsLimit().set(net.minecraft.client.InactivityFpsLimit.MINIMIZED); // no 30 fps limit when nobody touches the keys
+				client.options.hideGui = true;
+			});
+			context.runOnClient(PlayerCharactersClientGameTest::spawnFriend);
+			context.runOnClient(client -> {
+				Player friend = client.level.getPlayerByUUID(FRIEND);
+				for (EquipmentSlot slot : EquipmentSlot.values()) {
+					friend.setItemSlot(slot, ItemStack.EMPTY);
+				}
+			});
+			context.waitTicks(10);
+			List<String> ids = new ArrayList<>(List.of("own skin", "Alien", "Penguin", "White Queen", "Black Wolf"));
+			for (int round = 0; round < 2; round++) { // the first round warms up the Java compiler
+				for (String id : ids) {
+					setChoice(context, id.equals("own skin") ? Choice.OWN_SKIN : Choice.character(id));
+					context.waitTicks(30);
+					long nanos = context.computeOnClient(client -> CharacterModelRenderer.emitNanos());
+					long vertices = context.computeOnClient(client -> CharacterModelRenderer.emittedVertices());
+					long frames = context.computeOnClient(client -> CharacterModelRenderer.submitCount());
+					context.waitTicks(100);
+					long dn = context.computeOnClient(client -> CharacterModelRenderer.emitNanos()) - nanos;
+					long dv = context.computeOnClient(client -> CharacterModelRenderer.emittedVertices()) - vertices;
+					long df = Math.max(1, context.computeOnClient(client -> CharacterModelRenderer.submitCount()) - frames);
+					int fps = context.computeOnClient(Minecraft::getFps);
+					if (round == 1) {
+						System.out.printf(Locale.ROOT, "[playercharacters-test] BENCH %-12s %7d corners/frame  %6.3f ms/frame writing them  %4d fps (%d frames)%n", id,
+							dv / df, dn / 1.0e6 / df, fps, df);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Arms bend at the elbow and hands make shapes: on a 3D character (whose arm's corners really move), on Minecraft's
+	 * own model (drawn again bent, unless armor is in the way), and for the middle finger made with the hand's fingers.
+	 */
+	private static void checkElbowsAndFingers(ClientGameTestContext context) {
+		setChoice(context, Choice.character("Alien"));
+		context.runOnClient(client -> EmotePlayer.start(client.level.getPlayerByUUID(FRIEND), Emotes.FLEX));
+		context.waitTicks(14);
+		float[] flex = context.computeOnClient(client -> {
+			CharacterRenderState state = friendRenderState(client);
+			friendModel(client).setupAnim((net.minecraft.client.renderer.entity.state.AvatarRenderState) state);
+			com.playercharacters.render.ArmPose right = state.playercharacters$arm(true);
+			com.playercharacters.render.ArmPose left = state.playercharacters$arm(false);
+			CharacterModel.ArmRig rig = CharacterLibrary.get("Alien").model().extras().rightRig();
+			com.playercharacters.render.ArmBender bender = com.playercharacters.render.ArmBender.of(rig, right, true);
+			org.joml.Vector3f hand = CharacterLibrary.get("Alien").model().part(CharacterModel.Bone.RIGHT_ARM).hand();
+			float moved = bender == null ? 0.0F : bender.handPoint(hand, new org.joml.Vector3f()).distance(hand);
+			return new float[] {right.bend, left.bend, right.curl[1], moved};
+		});
+		check(flex[0] > 1.2F && flex[1] > 1.2F && flex[2] > 0.9F && flex[3] > 0.2F,
+			"flexing bends both elbows (" + flex[0] + ", " + flex[1] + " radians), makes fists (" + flex[2] + ") and moves the hand " + flex[3] + " blocks");
+		context.runOnClient(client -> EmotePlayer.stop(FRIEND));
+		context.waitTicks(8);
+
+		setChoice(context, Choice.character("Robot"));
+		context.runOnClient(client -> EmotePlayer.start(client.level.getPlayerByUUID(FRIEND), Emotes.HEADBANG));
+		context.waitTicks(14);
+		float[] horns = context.computeOnClient(client -> {
+			CharacterRenderState state = friendRenderState(client);
+			friendModel(client).setupAnim((net.minecraft.client.renderer.entity.state.AvatarRenderState) state);
+			com.playercharacters.render.ArmPose right = state.playercharacters$arm(true);
+			return new float[] {right.curl[1], right.curl[2], right.curl[4]};
+		});
+		check(horns[0] < 0.1F && horns[1] > 0.9F && horns[2] < 0.1F, "headbanging makes rock horns: index and little finger out, middle curled "
+			+ Arrays.toString(horns));
+		context.runOnClient(client -> EmotePlayer.stop(FRIEND));
+		context.waitTicks(8);
+
+		// The middle finger with the hand's own fingers: the forearm up, only the middle finger out.
+		setChoice(context, Choice.character("Frog"));
+		context.runOnClient(client -> MiddleFingerEmote.start(FRIEND));
+		context.waitTicks(8);
+		float[] finger = context.computeOnClient(client -> {
+			CharacterRenderState state = friendRenderState(client);
+			friendModel(client).setupAnim((net.minecraft.client.renderer.entity.state.AvatarRenderState) state);
+			com.playercharacters.render.ArmPose right = state.playercharacters$arm(true);
+			return new float[] {right.bend, right.curl[1], right.curl[2]};
+		});
+		check(finger[0] > 1.3F && finger[1] > 0.9F && finger[2] < 0.0F, "the frog shows the middle finger with its own fingers " + Arrays.toString(finger));
+		context.waitTicks(56);
+
+		// Minecraft's own model: with a chestplate the arms stay straight (and point where the hands would be); without one
+		// they are drawn bent.
+		setChoice(context, Choice.OWN_SKIN);
+		context.runOnClient(client -> EmotePlayer.start(client.level.getPlayerByUUID(FRIEND), Emotes.FLEX));
+		context.waitTicks(14);
+		float[] armored = vanillaArm(context);
+		check(armored[0] == 1.0F && armored[1] == 0.0F, "in a chestplate, the arms stay straight " + Arrays.toString(armored));
+		ItemStack chestplate = context.computeOnClient(client -> client.level.getPlayerByUUID(FRIEND).getItemBySlot(EquipmentSlot.CHEST));
+		context.runOnClient(client -> client.level.getPlayerByUUID(FRIEND).setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY));
+		context.waitTicks(3);
+		float[] bare = vanillaArm(context);
+		check(bare[0] == 0.0F && bare[1] > 1.2F, "without one, Minecraft's arm is drawn bent at the elbow " + Arrays.toString(bare));
+		context.takeScreenshot("95-friend-own-skin-flex");
+		context.runOnClient(client -> {
+			EmotePlayer.stop(FRIEND);
+			client.level.getPlayerByUUID(FRIEND).setItemSlot(EquipmentSlot.CHEST, chestplate);
+		});
+		context.waitTicks(8);
+	}
+
+	/** The friend's right arm in Minecraft's model: its size (0 when it is hidden to be drawn bent) and its elbow's bend. */
+	private static float[] vanillaArm(ClientGameTestContext context) {
+		return context.computeOnClient(client -> {
+			CharacterRenderState state = friendRenderState(client);
+			net.minecraft.client.model.player.PlayerModel model = friendModel(client);
+			model.setupAnim((net.minecraft.client.renderer.entity.state.AvatarRenderState) state);
+			return new float[] {model.rightArm.xScale, state.playercharacters$arm(true).bend};
+		});
 	}
 
 	/** Emotes go on while walking, running and jumping; sneaking stops them. While walking the legs walk, unless the emote moves them itself. */
@@ -774,15 +984,27 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			check(character.model().butt().y() > 0.2F && character.model().butt().z() < 0.0F,
 				id + "'s butt is behind it, above the ground: " + character.model().butt());
 			CharacterModel.Extras extras = character.model().extras();
-			check(!extras.madParts().isEmpty() && extras.middleFinger() != null && extras.middleFinger().vertexCount() > 0,
+			check(!extras.madParts().isEmpty() && (extras.fingerGesture() || extras.middleFinger() != null && extras.middleFinger().vertexCount() > 0),
 				id + " has an angry face " + extras.madParts().keySet() + " and a middle finger");
+			CharacterModel.ArmRig right = extras.rightRig();
+			CharacterModel.ArmRig left = extras.leftRig();
+			int expected = switch (id) {
+				case "Penguin" -> 3;
+				case "Skinny Alien", "Blue", "Black Wolf", "White Queen" -> 5;
+				default -> 4;
+			};
+			check(right != null && left != null && left.fingers().size() == expected
+				&& right.fingers().size() == (id.equals("White Queen") ? 0 : expected)
+				&& right.elbow().distance(right.shoulder()) > 0.1F && left.fingers().stream().allMatch(finger -> finger.firstPerson() != null),
+				id + " has elbows and " + expected + " fingers on each hand that curl, also in first person");
 			check(!extras.blinkParts().isEmpty() && extras.bounce() > 0.0F, id + " blinks " + extras.blinkParts().keySet() + " and bobs as it walks");
 			check(extras.firstPerson().rightArm() != null && extras.firstPerson().rightArm().vertexCount() >= character.model().part(CharacterModel.Bone.RIGHT_ARM)
 				.vertexCount(), id + " has a detailed arm for first person (" + extras.firstPerson().rightArm().vertexCount() / 4 + " polygons)");
 			int full = character.model().quadCount();
 			int near = character.model().forDistance(15.0 * 15.0).quadCount();
 			int far = character.model().forDistance(40.0 * 40.0).quadCount();
-			check(near < full * 0.75 && far < near * 0.8 && far > 300, id + " has simpler copies for far away: " + full + ", " + near + ", " + far + " polygons");
+			// The wolf's surfaces are already about as coarse as the near copy's cubes, so that copy removes less from it.
+			check(near < full * 0.85 && far < near * 0.8 && far > 300, id + " has simpler copies for far away: " + full + ", " + near + ", " + far + " polygons");
 		}
 		check(CharacterLibrary.get("Penguin").model().extras().waddleRadians() > 0.1F, "the penguin waddles");
 		check(CharacterLibrary.get("SpongeBob").model().extras().headTurn() == 0.3F && CharacterLibrary.get("Blue").model().extras().headTurn() == 0.0F,
@@ -798,9 +1020,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		check(wolf.extras().glowParts().size() >= 3 && wolf.extras().tails().stream().allMatch(tail -> tail.glow() != null),
 			"the black wolf's eyes, runes and tail flames glow " + wolf.extras().glowParts().keySet());
 		check(wolf.extras().particles().size() >= 5, "the black wolf gives off particles (" + wolf.extras().particles().size() + " kinds)");
+		// Version 7's wolf had over 55,000 polygons (all of them drawn every frame up close); now it has about half.
+		check(wolf.quadCount() < 30000, "the black wolf is lighter to draw: " + wolf.quadCount() + " polygons");
 		CharacterModel queen = CharacterLibrary.get("White Queen").model();
 		check(queen.extras().arms() == CharacterModel.Arms.RIFLE && queen.extras().hideHeldItems() && queen.height() > 1.8F,
 			"the white queen holds a rifle, " + queen.height() + " blocks tall");
+		check(queen.extras().rightRig().held() != null && queen.extras().rightRig().heldGlow() != null && queen.extras().rightRig().heldFirstPerson() != null,
+			"the queen's rifle is held in her hand, so it goes where her hand goes");
 		check(CharacterLibrary.byName("black wolf") == CharacterLibrary.get("Black Wolf") && CharacterLibrary.byName("67") == CharacterLibrary.get("Blue"),
 			"characters can be found by the name shown in menus");
 		check(CharacterLibrary.problems().isEmpty(), "no load problems, got " + CharacterLibrary.problems());
@@ -882,7 +1108,7 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 			}
 			CharacterLibrary.reload();
 		});
-		check(readString(folder.resolve("Robot").resolve("model.obj")).contains("o middle_finger"), "upgrade: the robot of version 3 got its middle finger");
+		check(readString(folder.resolve("Robot").resolve("model.obj")).equals(bundled(context, "Robot/model.obj")), "upgrade: the robot of version 3 was updated");
 		check(Files.isDirectory(folder.resolve("Penguin")) && Files.isDirectory(folder.resolve("Blue")), "upgrade: the new characters were added");
 		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 10, "upgrade from 3: ten characters and no problems");
 	}
@@ -954,10 +1180,13 @@ public class PlayerCharactersClientGameTest implements FabricClientGameTest {
 		check(CharacterLibrary.problems().isEmpty() && CharacterLibrary.all().size() == 10, "upgrade from 5: ten characters and no problems");
 	}
 
-	/** Puts the eight examples back the way an older version left them: every one of them is updated. */
+	/** Puts the examples back the way an older version left them: every one of them is updated. */
 	private static void checkUpgradeFromOlder(ClientGameTestContext context, Path jarFile, int version) {
 		Path folder = CharacterLibrary.folder();
-		List<String> examples = List.of("Alien", "Robot", "Frog", "Burger", "Penguin", "SpongeBob", "Skinny Alien", "Blue");
+		List<String> examples = new ArrayList<>(List.of("Alien", "Robot", "Frog", "Burger", "Penguin", "SpongeBob", "Skinny Alien", "Blue"));
+		if (version >= 7) {
+			examples.addAll(List.of("White Queen", "Black Wolf"));
+		}
 		context.runOnClient(client -> {
 			try (java.nio.file.FileSystem jar = java.nio.file.FileSystems.newFileSystem(jarFile)) {
 				for (String example : examples) {

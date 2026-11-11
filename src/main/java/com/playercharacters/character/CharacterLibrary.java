@@ -137,6 +137,33 @@ public final class CharacterLibrary {
 		outdated("SpongeBob/model.obj", "c2bc7bfdabf74bc3bb6c09c9babec5c29279a0adbf7dad2c89b6e53d6f7d7569");
 		outdated("Skinny Alien/model.obj", "78c7e5f0ff25a730c593840a7bedfb96bdcabd8fd1f4484eeb8d17cbf9585ca6");
 		outdated("Blue/model.obj", "e0b99d7c604f6a41ca6f52daa95de3d4f5a8d8babe0ab71e3ddbd3183f2911ff");
+		// Version 7 (version 8 gave every example elbows and fingers that curl, and a lighter Black Wolf).
+		outdated("Alien/model.obj", "e9aaa9c3996351b9607a5d0c8c76924bb3fe0d662c331eca88363b17b819fc6d");
+		outdated("Alien/character.json", "f346caeb13a24b6478106816e48555516eee6a38f6b2ab299013264e518285c4");
+		outdated("Alien/icon.png", "e1f2ef9611c24f00d0cd81cd5a86e7de7bf5b1c16276d774bb42fa5d91cba4fd");
+		outdated("Black Wolf/model.obj", "8fa8637061526c24cb154e0b64d0a66a5b8bed97a0dc85789afecb1c3fe8153a");
+		outdated("Black Wolf/character.json", "ebdebe3508ef597b733bd922514dc84893fe03fdd0cf8d40e82ac1cb99aa3c09");
+		outdated("Black Wolf/icon.png", "789207875aed394f06410f20e7d0cfa6da44ce6a73fff5758f90dd89e558c495");
+		outdated("Blue/model.obj", "1323b95e4934f01da37c5205214e56bebb7f94d324312e068430769cbbc0ef89");
+		outdated("Blue/character.json", "d25e64bb6a7191d16780ba8b6dddf09e03350812e0b1dc4a1ef7149c14b4471d");
+		outdated("Burger/model.obj", "8802ab9a2250a13c878733f87f947ef273677a0cb01d51853eeabf1e793155db");
+		outdated("Burger/character.json", "0ea41755d10e9f239bc0afba88be03009f44661a8bef494e4dd5f909cc6f3183");
+		outdated("Burger/icon.png", "6838b7620d9027caa1bb606896090c15e99fa1813761a3cbc7d1a1787c815653");
+		outdated("Frog/model.obj", "c08a74feebd7458eaab894fde274f0fe52847f733772bb123f881219fb963aab");
+		outdated("Frog/character.json", "6a3ffc622e319ca9651eec514abcc3f3dfc89749e96ee82a6478b4d0590da85a");
+		outdated("Frog/icon.png", "64dc4b84851b37c5db3db18a8f176590bcfb309e39b8407acfb26650316ddf5a");
+		outdated("Penguin/model.obj", "ec6d8278edf7bd3ec04c8464e1c01f0caff8f161fd48197414f12062d191bd77");
+		outdated("Penguin/character.json", "855793114cf588760810b87136a67620e2839e99c829d866becd1dab86864db1");
+		outdated("Robot/model.obj", "8d19812b8cb30758bf749b895127b6ebf7a295b50fc8afbc16205b84645b8ccc");
+		outdated("Robot/character.json", "0278dae8436f9b4083643a2452d86903bde6d272b0dfe4d5e69f514ec89bc5dc");
+		outdated("Robot/icon.png", "0972235e2a50b42d673f611bb5809c311ed152171b4e3b4a64e75e7d16b88a56");
+		outdated("Skinny Alien/model.obj", "18c253d879cedfd65ea0059dd4a40d07ad86fe68e96a5f44afd6b245031015c3");
+		outdated("Skinny Alien/character.json", "42c197e28934162f43994543c083ded54f7fb4cec6ff8fc5774e7d92a58b2915");
+		outdated("SpongeBob/model.obj", "49cb8e4fa3d113c7d6bf7aa7cb6d9c0114abeb8e0e4d9b10229c56ff97318774");
+		outdated("SpongeBob/character.json", "1990e08cab297f82c97dff0692114a1f9273cfe87097763480177db46907cad7");
+		outdated("White Queen/model.obj", "8529d413cb351d0b39b174f72ec4e01bb73e9150c08091d7d6c5ec83ffec0e10");
+		outdated("White Queen/character.json", "2b63c59f27e2c919d9d704565d2142a2035ae9774c6b8dfc7aa78b69aab09c90");
+		outdated("White Queen/icon.png", "82757d2fded0c461c17a77857a4249c7b1feb9ba8eadbbc7d72f739192cf0afb");
 	}
 
 	/** Remembers SHA-256 hashes of older versions of an example file. */

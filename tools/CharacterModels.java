@@ -35,15 +35,15 @@ public class CharacterModels {
 			}
 			Map<String, Mesh> parts = design.build();
 			if (!parts.containsKey("fp_right_arm")) {
-				// First-person arms: the same arms built again with smaller polygons, and finer skin.
+				// First-person arms: the same arms (and fingers) built again with smaller polygons, and finer skin.
 				detailScale = 0.6;
 				Map<String, Mesh> detailed = design.build();
 				detailScale = 1.0;
-				for (String arm : List.of("right_arm", "left_arm", "middle_finger")) {
-					Mesh m = detailed.get(arm);
-					if (m != null) {
-						addFineDetail(m);
-						parts.put("fp_" + arm, m);
+				for (Map.Entry<String, Mesh> entry : detailed.entrySet()) {
+					String arm = entry.getKey();
+					if (arm.equals("right_arm") || arm.equals("left_arm") || arm.equals("middle_finger") || isHandPart(arm)) {
+						addFineDetail(entry.getValue());
+						parts.put("fp_" + arm, entry.getValue());
 					}
 				}
 			}
@@ -88,7 +88,41 @@ public class CharacterModels {
 	record Rig(double jawAngle, V head, V jaw, V body, V rightArm, V rightHand, V leftArm, V leftHand, V rightLeg, V leftLeg, V butt) {
 	}
 
+	/**
+	 * A finger that curls in the mod: its knuckle, its tip, and which way the tip goes when it curls (toward the palm).
+	 * {@code rigid} fingers (a robot's) bend sharply at their joints. {@code joints} (fractions of the length) and
+	 * {@code angles} (degrees, for a fist) can be null for the mod's defaults.
+	 */
+	record FingerSpec(V base, V tip, V curl, boolean rigid, double[] joints, double[] angles) {
+		FingerSpec(V base, V tip, V curl, boolean rigid) {
+			this(base, tip, curl, rigid, null, null);
+		}
+	}
+
+	/** Names of the parts that belong to a hand: fingers ("right_index") and things held ("right_hand"). */
+	static boolean isHandPart(String name) {
+		return name.matches("(right|left)_(thumb|index|middle|ring|little|hand)");
+	}
+
 	abstract static class Design {
+		/** Fingers that curl, by part name ("right_index"), filled in while building. */
+		final Map<String, FingerSpec> fingerSpecs = new LinkedHashMap<>();
+		/** Elbows and wrists ("right_elbow", "left_wrist"), filled in while building. */
+		final Map<String, V> armJoints = new LinkedHashMap<>();
+
+		/** Adds a finger: its mesh as a part of its own, and its joint for character.json. */
+		void addFinger(Map<String, Mesh> parts, String name, Mesh mesh, FingerSpec spec) {
+			parts.put(name, mesh);
+			this.fingerSpecs.put(name, spec);
+		}
+
+		/** Where an arm bends (side -1 is the right arm): the elbow, and the wrist where the forearm's twist ends. */
+		void elbow(double side, V elbow, V wrist) {
+			String prefix = side < 0 ? "right_" : "left_";
+			this.armJoints.put(prefix + "elbow", elbow);
+			this.armJoints.put(prefix + "wrist", wrist);
+		}
+
 		/** The folder name, which is also the character's id in the mod. */
 		abstract String name();
 
@@ -160,6 +194,15 @@ public class CharacterModels {
 		List<String> particles() {
 			return List.of();
 		}
+	}
+
+	/** A finger shape as a mesh of its own, built around the line from its knuckle to its tip ({@code reach} around it). */
+	static Mesh sdfFinger(Sdf shape, V base, V tip, double reach, double cell, int material) {
+		V lo = v(Math.min(base.x, tip.x) - reach, Math.min(base.y, tip.y) - reach, Math.min(base.z, tip.z) - reach);
+		V hi = v(Math.max(base.x, tip.x) + reach, Math.max(base.y, tip.y) + reach, Math.max(base.z, tip.z) + reach);
+		Mesh m = new Mesh();
+		m.append(surfaceNets(shape, lo, hi, cell), material);
+		return m;
 	}
 
 	/** Parts that are only drawn during the middle finger emote (an angry face and a right arm making the gesture), or a blink. */
@@ -283,13 +326,14 @@ public class CharacterModels {
 			parts.put("head", buildHead());
 			parts.put("jaw", buildJaw());
 			parts.put("body", surfaceNets(Alien::bodySdf, v(-0.24, 0.84, -0.14), v(0.24, 1.70, 0.14), 0.0135));
-			parts.put("right_arm", buildArm(-1, false));
-			parts.put("left_arm", buildArm(1, false));
+			for (int side = -1; side <= 1; side += 2) {
+				parts.put(side < 0 ? "right_arm" : "left_arm", buildArm(side));
+				this.addHand(parts, side);
+			}
 			parts.put("right_leg", buildLeg(-1));
 			parts.put("left_leg", buildLeg(1));
 			parts.put("mad_head", buildMadHead());
 			parts.put("blink_head", buildBlink());
-			parts.put("middle_finger", buildArm(-1, true));
 			for (Map.Entry<String, Mesh> part : parts.entrySet()) {
 				String name = part.getKey();
 				Mesh m = part.getValue();
@@ -466,67 +510,49 @@ public class CharacterModels {
 			return smax(d, wrist.y - 0.025 - p.y, 0.01);
 		}
 
-		/** A narrow hand with three long knuckled fingers and a thumb. */
-		static double handShape(V p, double s, List<V[]> tips) {
+		/** A narrow palm, with knuckles where the three long fingers and the thumb grow out (they are parts of their own). */
+		static double palmShape(V p, double s) {
 			V palm = v(s * 0.228, 0.745, 0.056);
 			double d = ellipsoid(p, palm, v(0.016, 0.042, 0.029));
 			d = smin(d, SkinnyAlien.sphere(p, v(s * 0.226, 0.785, 0.045), 0.017), 0.02);
 			for (int f = -1; f <= 1; f++) {
-				V base = v(s * 0.228, 0.712, 0.056 + f * 0.017);
-				d = smin(d, SkinnyAlien.sphere(p, base, 0.0085), 0.006);
-				V[] tip = new V[2];
-				d = smin(d, SkinnyAlien.finger(p, base, v(s * 0.03, -1, 0.1), v(0, 0, 0.12), f == 0 ? 0.165 : 0.15, 0.0075, tip), 0.006);
-				if (tips != null) {
-					tips.add(tip);
-				}
+				d = smin(d, SkinnyAlien.sphere(p, v(s * 0.228, 0.712, 0.056 + f * 0.017), 0.0085), 0.006);
 			}
-			V[] thumb = new V[2];
-			d = smin(d, SkinnyAlien.finger(p, v(s * 0.222, 0.74, 0.078), v(-s * 0.15, -0.8, 0.55), v(0, 0.02, 0.05), 0.075, 0.0072, thumb), 0.008);
-			if (tips != null) {
-				tips.add(thumb);
-			}
-			return d;
+			return smin(d, SkinnyAlien.sphere(p, v(s * 0.222, 0.74, 0.078), 0.0078), 0.008);
 		}
 
-		/** A fist with the long middle finger pointing forward (+Z), which is up once the arm is raised. */
-		static double fistShape(V p, double s, List<V[]> tips) {
-			V palm = v(s * 0.228, 0.75, 0.058);
-			double d = ellipsoid(p, palm, v(0.02, 0.036, 0.03));
-			d = smin(d, SkinnyAlien.sphere(p, v(s * 0.226, 0.785, 0.045), 0.017), 0.02);
-			for (int f = -1; f <= 1; f++) {
-				V knuckle = v(s * 0.228 + f * 0.011, 0.72, 0.076);
-				d = smin(d, SkinnyAlien.sphere(p, knuckle, 0.0088), 0.005);
-				if (f == 0) {
-					V[] tip = new V[2];
-					d = smin(d, SkinnyAlien.finger(p, knuckle, v(0, 0.08, 1), v(0, 0.02, 0), 0.12, 0.0075, tip), 0.006);
-					if (tips != null) {
-						tips.add(tip);
-					}
-				} else {
-					d = smin(d, roundCone(p, knuckle, knuckle.add(v(0, -0.02, 0.01)), 0.0078, 0.007), 0.004);
-					d = smin(d, roundCone(p, knuckle.add(v(0, -0.02, 0.01)), knuckle.add(v(0, -0.03, -0.012)), 0.007, 0.0062), 0.004);
-				}
-			}
-			return smin(d, roundCone(p, v(s * 0.216, 0.752, 0.075), v(s * 0.232, 0.724, 0.088), 0.0075, 0.007), 0.006); // thumb
-		}
-
-		static Mesh buildArm(int side, boolean middleFinger) {
+		static Mesh buildArm(int side) {
 			double s = side;
 			Mesh m = surfaceNets(p -> armShape(p, s), v(s * 0.2 - 0.075, 0.74, -0.08), v(s * 0.2 + 0.085, 1.48, 0.1), 0.0095);
-			Sdf hand = middleFinger ? p -> fistShape(p, s, null) : p -> handShape(p, s, null);
-			m.append(middleFinger
-				? surfaceNets(hand, v(s * 0.228 - 0.04, 0.69, 0.0), v(s * 0.228 + 0.04, 0.81, 0.23), 0.0044)
-				: surfaceNets(hand, v(s * 0.228 - 0.06, 0.53, -0.0), v(s * 0.228 + 0.06, 0.81, 0.15), 0.0044), SKIN);
-			List<V[]> tips = new ArrayList<>();
-			if (middleFinger) {
-				fistShape(v(0, 0, 0), s, tips);
-			} else {
-				handShape(v(0, 0, 0), s, tips);
-			}
-			for (V[] tip : tips) {
-				addCone(m, tip[0].sub(tip[1].mul(0.004)), tip[0].add(tip[1].mul(0.018)), 0.0055, 6, NAIL);
-			}
+			m.append(surfaceNets(p -> palmShape(p, s), v(s * 0.228 - 0.04, 0.68, 0.01), v(s * 0.228 + 0.04, 0.81, 0.11), 0.0044), SKIN);
 			return m;
+		}
+
+		/**
+		 * Three long knuckled fingers and a thumb, each a part of its own that curls toward the palm (which faces the body),
+		 * with a dark nail on the tip. Also tells where the elbow is.
+		 */
+		void addHand(Map<String, Mesh> parts, int side) {
+			double s = side;
+			String prefix = side < 0 ? "right_" : "left_";
+			V shift = hunched(side < 0 ? RIGHT_SHOULDER : LEFT_SHOULDER).sub(side < 0 ? RIGHT_SHOULDER : LEFT_SHOULDER);
+			this.elbow(s, v(s * 0.215, 1.085, 0.0).add(shift), v(s * 0.226, 0.785, 0.045).add(shift));
+			String[] roles = {"little", "middle", "index"};
+			for (int f = -1; f <= 1; f++) {
+				V base = v(s * 0.228, 0.712, 0.056 + f * 0.017);
+				double length = f == 0 ? 0.165 : 0.15;
+				this.addSdfFinger(parts, prefix + roles[f + 1], base, v(s * 0.03, -1, 0.1), v(0, 0, 0.12), length, 0.0075, v(-s, 0, 0), shift);
+			}
+			this.addSdfFinger(parts, prefix + "thumb", v(s * 0.222, 0.74, 0.078), v(-s * 0.15, -0.8, 0.55), v(0, 0.02, 0.05), 0.075, 0.0072,
+				v(-s * 0.6, 0, -0.8), shift);
+		}
+
+		void addSdfFinger(Map<String, Mesh> parts, String name, V base, V dir, V curve, double length, double radius, V curl, V shift) {
+			V[] tip = new V[2];
+			SkinnyAlien.finger(v(0, 0, 0), base, dir, curve, length, radius, tip);
+			Mesh m = sdfFinger(p -> SkinnyAlien.finger(p, base, dir, curve, length, radius, null), base, tip[0], radius + 0.012, 0.0044, SKIN);
+			addCone(m, tip[0].sub(tip[1].mul(0.004)), tip[0].add(tip[1].mul(0.018)), 0.0055, 6, NAIL);
+			this.addFinger(parts, name, m, new FingerSpec(base.add(shift), tip[0].add(shift), curl, false));
 		}
 
 		static double legShape(V p, double s) {
@@ -591,20 +617,21 @@ public class CharacterModels {
 			return rotX(p.sub(HEAD_PIVOT), HEAD_TILT).add(HEAD_PIVOT).add(shift);
 		}
 
-		/** Leans the upper body forward; the head rides along but stays looking ahead, arms hang straight. */
+		/** Leans the upper body forward; the head rides along but stays looking ahead, arms (and their fingers) hang straight. */
 		static void hunch(String part, Mesh m) {
 			if (part.endsWith("_leg")) {
 				return;
 			}
+			String arm = part.startsWith("right_") || part.equals("middle_finger") ? "right" : part.startsWith("left_") ? "left" : part;
 			for (int i = 0; i < m.pos.size(); i++) {
 				V p = m.pos.get(i);
-				switch (part) {
+				switch (arm) {
 					case "head", "jaw", "mad_head", "blink_head" -> {
 						m.pos.set(i, headPose(p));
 						m.nrm.set(i, rotX(m.nrm.get(i), HEAD_TILT));
 					}
-					case "right_arm", "middle_finger" -> m.pos.set(i, p.add(hunched(RIGHT_SHOULDER).sub(RIGHT_SHOULDER)));
-					case "left_arm" -> m.pos.set(i, p.add(hunched(LEFT_SHOULDER).sub(LEFT_SHOULDER)));
+					case "right" -> m.pos.set(i, p.add(hunched(RIGHT_SHOULDER).sub(RIGHT_SHOULDER)));
+					case "left" -> m.pos.set(i, p.add(hunched(LEFT_SHOULDER).sub(LEFT_SHOULDER)));
 					default -> {
 						double angle = hunchAngle(p.y);
 						m.pos.set(i, rotX(p.sub(HUNCH_CENTER), angle).add(HUNCH_CENTER));
@@ -826,27 +853,45 @@ public class CharacterModels {
 			addTube(m, path(knuckle, knuckle.add(tip).mul(0.5), tip), radii(radius * 0.9, radius * 0.85, radius * 0.7), 7, false, DARK, DARK);
 		}
 
-		static Mesh armMesh(double s, boolean middleFinger) {
+		static Mesh armMesh(double s) {
 			Mesh arm = surfaceNets(p -> arm(p, s), v(s * 0.272 - 0.11, 0.66, -0.11), v(s * 0.272 + 0.11, 1.5, 0.11), 0.013);
 			addPiston(arm, v(s * 0.272, 1.03, -0.05), v(s * 0.272, 0.80, -0.07), 0.013);
 			for (int k = -1; k <= 1; k += 2) {
 				addRivet(arm, p -> arm(p, s), v(s * (0.262 + k * 0.05), 1.55, 0.0), v(0, -1, 0));
 				addRivet(arm, p -> arm(p, s), v(s * 0.262, 1.55, k * 0.05), v(0, -1, 0));
 			}
-			if (middleFinger) {
-				for (int f = -1; f <= 1; f += 2) { // curled grippers
-					addGripper(arm, v(s * (0.272 + f * 0.02), 0.695, 0.06), v(s * (0.272 + f * 0.021), 0.678, 0.083), v(s * (0.272 + f * 0.02), 0.688, 0.092),
-						0.0105);
-				}
-				addGripper(arm, v(s * 0.272, 0.705, 0.07), v(s * 0.272, 0.707, 0.135), v(s * 0.272, 0.71, 0.195), 0.016);
-				return arm;
+			for (int f = -1; f <= 1; f++) { // the sockets the grippers turn in
+				addSphere(arm, v(s * (0.272 + f * 0.019), 0.688, 0.052), 0.0118, CHROME);
 			}
-			for (int f = -1; f <= 1; f += 2) { // two gripper fingers and a thumb
-				addGripper(arm, v(s * (0.272 + f * 0.018), 0.69, 0.05), v(s * (0.272 + f * 0.022), 0.635, 0.075), v(s * (0.272 + f * 0.012), 0.597, 0.088),
-					0.0105);
-			}
-			addGripper(arm, v(s * 0.255, 0.71, 0.075), v(s * 0.25, 0.672, 0.107), v(s * 0.258, 0.645, 0.118), 0.0095);
+			addSphere(arm, v(s * 0.256, 0.708, 0.074), 0.011, CHROME);
 			return arm;
+		}
+
+		/**
+		 * Three jointed gripper fingers and a thumb, each a part of its own that bends sharply at its joint. The palm faces
+		 * forward, so the fingers close toward the front, and the thumb toward them.
+		 */
+		void addHand(Map<String, Mesh> parts, double s) {
+			String prefix = s < 0 ? "right_" : "left_";
+			this.elbow(s, v(s * 0.272, 1.065, 0.005), v(s * 0.272, 0.775, 0.03));
+			String[] roles = {"index", "middle", "little"};
+			for (int f = -1; f <= 1; f++) {
+				double x = s * (0.272 + f * 0.019);
+				double length = f == 0 ? 1.08 : 1.0;
+				V base = v(x, 0.688, 0.052);
+				V knuckle = v(x + s * f * 0.002, 0.688 - 0.055 * length, 0.077);
+				V tip = v(x - s * f * 0.004, 0.688 - 0.093 * length, 0.09);
+				Mesh m = new Mesh();
+				addGripper(m, base, knuckle, tip, 0.0098);
+				this.addFinger(parts, prefix + roles[f + 1], finish(m, (p, n, mm, e) -> paintLimb(p, n, mm)),
+					new FingerSpec(base, tip, v(0, 0.25, 1), true, new double[] {0, 0.58}, new double[] {60, 75}));
+			}
+			V base = v(s * 0.256, 0.708, 0.074);
+			V tip = v(s * 0.258, 0.645, 0.118);
+			Mesh thumb = new Mesh();
+			addGripper(thumb, base, v(s * 0.25, 0.672, 0.107), tip, 0.0095);
+			this.addFinger(parts, prefix + "thumb", finish(thumb, (p, n, mm, e) -> paintLimb(p, n, mm)),
+				new FingerSpec(base, tip, v(s * 0.3, 0.2, -1), true, new double[] {0, 0.55}, new double[] {40, 55}));
 		}
 
 		static Mesh legMesh(double s) {
@@ -902,7 +947,8 @@ public class CharacterModels {
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(armMesh(s, false), (p, n, m, e) -> paintLimb(p, n, m)));
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(armMesh(s), (p, n, m, e) -> paintLimb(p, n, m)));
+				this.addHand(parts, s);
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(legMesh(s), (p, n, m, e) -> paintLimb(p, n, m)));
 			}
 
@@ -920,7 +966,6 @@ public class CharacterModels {
 				addEllipsoid(blink, v(s * EYE.x, EYE.y, EYE.z + 0.003), EYE_R.mul(1.12), DARK);
 			}
 			parts.put("blink_head", finish(blink, (p, n, m, e) -> paintMetal(p, n, m)));
-			parts.put("middle_finger", finish(armMesh(-1, true), (p, n, m, e) -> paintLimb(p, n, m)));
 			return parts;
 		}
 
@@ -1194,20 +1239,29 @@ public class CharacterModels {
 				addSphere(arm, v(s * 0.222, 0.86, 0.05), 0.03, SKIN);
 				addTube(arm, path(v(s * 0.222, 0.86, 0.05), v(s * 0.218, 0.78, 0.08), v(s * 0.212, 0.72, 0.105)), radii(0.03, 0.027, 0.024), 9, false, SKIN, SKIN);
 				addEllipsoid(arm, v(s * 0.212, 0.705, 0.115), v(0.035, 0.03, 0.03), SKIN);
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paintLimb));
+				// Four fingers with round pads, each a part of its own (the web next to it goes with it), curling back under the hand.
+				this.elbow(s, v(s * 0.222, 0.86, 0.05), v(s * 0.212, 0.72, 0.105));
+				String[] roles = {"thumb", "index", "middle", "little"};
 				V[] tips = new V[4];
 				for (int f = 0; f < 4; f++) {
 					double a = Math.toRadians(-50 + f * 33);
-					V tip = v(s * (0.212 + Math.sin(a) * 0.045), 0.645, 0.13 + Math.cos(a) * 0.035);
+					tips[f] = v(s * (0.212 + Math.sin(a) * 0.045), 0.645, 0.13 + Math.cos(a) * 0.035);
+				}
+				V root = v(s * 0.212, 0.70, 0.12);
+				for (int f = 0; f < 4; f++) {
+					double a = Math.toRadians(-50 + f * 33);
 					V knuckle = v(s * (0.212 + Math.sin(a) * 0.028), 0.672, 0.125 + Math.cos(a) * 0.02);
-					addTube(arm, path(v(s * 0.212, 0.70, 0.12), knuckle, tip), radii(0.011, 0.009, 0.008), 7, false, SKIN, SKIN);
-					addSphere(arm, knuckle, 0.0105, SKIN);
-					addSphere(arm, tip, 0.014, PAD);
-					tips[f] = tip;
+					Mesh finger = new Mesh();
+					addTube(finger, path(root, knuckle, tips[f]), radii(0.011, 0.009, 0.008), 7, false, SKIN, SKIN);
+					addSphere(finger, knuckle, 0.0105, SKIN);
+					addSphere(finger, tips[f], 0.014, PAD);
+					if (f > 0) {
+						addWeb(finger, v(s * 0.212, 0.69, 0.122), tips[f - 1], tips[f], 0.6);
+					}
+					this.addFinger(parts, (side < 0 ? "right_" : "left_") + roles[f], finish(finger, this::paintLimb),
+						new FingerSpec(root, tips[f], v(0, 0.25, -1), false, new double[] {0, 0.5}, new double[] {70, 80}));
 				}
-				for (int f = 0; f < 3; f++) { // webbing between the fingers
-					addWeb(arm, v(s * 0.212, 0.69, 0.122), tips[f], tips[f + 1], 0.6);
-				}
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paintLimb));
 
 				Mesh leg = surfaceNets(p -> legShape(p, s), v(s * 0.14 - 0.13, 0.03, -0.11), v(s * 0.14 + 0.13, 0.72, 0.22), 0.012);
 				addEllipsoid(leg, v(s * 0.135, 0.028, 0.06), v(0.075, 0.024, 0.065), SKIN);
@@ -1235,16 +1289,6 @@ public class CharacterModels {
 			}
 			parts.put("mad_head", finish(mad, this::paintHead));
 			parts.put("blink_head", finish(blinkLids(eyes, v(0.058, 0.056, 0.058), 0.12), (p, n, m, e) -> green(p, n, 1)));
-
-			double s = -1;
-			Mesh finger = new Mesh();
-			addSphere(finger, v(s * 0.17, 1.03, 0.0), 0.045, SKIN);
-			addTube(finger, path(v(s * 0.17, 1.03, 0.0), v(s * 0.205, 0.93, 0.03), v(s * 0.222, 0.86, 0.05)), radii(0.038, 0.033, 0.03), 9, false, SKIN, SKIN);
-			addSphere(finger, v(s * 0.222, 0.86, 0.05), 0.03, SKIN);
-			addTube(finger, path(v(s * 0.222, 0.86, 0.05), v(s * 0.218, 0.78, 0.08), v(s * 0.212, 0.72, 0.105)), radii(0.03, 0.027, 0.024), 9, false, SKIN, SKIN);
-			addFist(finger, v(s * 0.212, 0.695, 0.115), v(0.031, 0.034, 0.034), 0.0105, 0.07, SKIN, SKIN);
-			addSphere(finger, v(s * 0.212, 0.695 - 0.034 * 0.2 + 0.007, 0.115 + 0.034 * 0.55 + 0.07), 0.0135, PAD);
-			parts.put("middle_finger", finish(finger, this::paintLimb));
 			return parts;
 		}
 
@@ -1484,13 +1528,24 @@ public class CharacterModels {
 				addTorusY(arm, v(s * 0.527, 0.485, 0.08), 0.031, 0.008, GLOVE);
 				V palm = v(s * 0.53, 0.445, 0.095);
 				addEllipsoid(arm, palm, v(0.035, 0.05, 0.045), GLOVE);
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paint));
+				// A cartoon glove: three fat fingers and a thumb, each a part of its own, curling toward the palm (the body side).
+				String prefix = side < 0 ? "right_" : "left_";
+				this.elbow(s, v(s * 0.474, 0.672, 0.025), v(s * 0.527, 0.495, 0.079));
+				String[] roles = {"little", "middle", "index"};
 				for (int f = 0; f < 3; f++) {
 					double z = 0.095 + (f - 1) * 0.024;
-					addTube(arm, path(v(s * 0.53, 0.42, z), v(s * 0.535, 0.39, z + 0.008), v(s * 0.53, 0.37, z + 0.012)), radii(0.015, 0.014, 0.013), 8, false, GLOVE, GLOVE);
-					addSphere(arm, v(s * 0.535, 0.393, z + 0.008), 0.0155, GLOVE); // knuckle
+					V base = v(s * 0.53, 0.425, z);
+					V tip = v(s * 0.53, 0.362, z + 0.013);
+					Mesh finger = new Mesh();
+					addTube(finger, path(base, v(s * 0.535, 0.39, z + 0.008), v(s * 0.53, 0.37, z + 0.012)), radii(0.015, 0.014, 0.013), 8, false, GLOVE, GLOVE);
+					addSphere(finger, v(s * 0.535, 0.393, z + 0.008), 0.0155, GLOVE); // knuckle
+					this.addFinger(parts, prefix + roles[f], finish(finger, this::paint), new FingerSpec(base, tip, v(-s, 0, 0), false));
 				}
-				addTube(arm, path(v(s * 0.49, 0.45, 0.115), v(s * 0.475, 0.43, 0.13), v(s * 0.465, 0.415, 0.135)), radii(0.014, 0.013, 0.012), 7, false, GLOVE, GLOVE);
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, this::paint));
+				V thumbBase = v(s * 0.495, 0.452, 0.112);
+				Mesh thumb = new Mesh();
+				addTube(thumb, path(thumbBase, v(s * 0.475, 0.43, 0.13), v(s * 0.465, 0.415, 0.135)), radii(0.014, 0.013, 0.012), 7, false, GLOVE, GLOVE);
+				this.addFinger(parts, prefix + "thumb", finish(thumb, this::paint), new FingerSpec(thumbBase, v(s * 0.462, 0.41, 0.137), v(-s * 0.5, 0, -1), false));
 
 				Mesh leg = new Mesh();
 				addTube(leg, path(v(s * 0.12, 0.62, 0), v(s * 0.13, 0.36, 0.02), v(s * 0.125, 0.11, 0.0)), radii(0.028, 0.026, 0.024), 8, false, LIMB, LIMB);
@@ -1504,13 +1559,6 @@ public class CharacterModels {
 				}
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg, this::paint));
 			}
-
-			double s = -1;
-			Mesh finger = new Mesh();
-			addTube(finger, path(v(s * 0.40, 0.785, 0), v(s * 0.49, 0.66, 0.03), v(s * 0.525, 0.50, 0.075)), radii(0.026, 0.024, 0.022), 8, false, LIMB, LIMB);
-			addTorusY(finger, v(s * 0.527, 0.50, 0.078), 0.034, 0.012, GLOVE);
-			addFist(finger, v(s * 0.53, 0.45, 0.095), v(0.044, 0.048, 0.042), 0.0155, 0.085, GLOVE, GLOVE);
-			parts.put("middle_finger", finish(finger, this::paint));
 			return parts;
 		}
 
@@ -1638,7 +1686,7 @@ public class CharacterModels {
 		static final V CIGARETTE_DIR = v(0.5, -0.3, 0.81).norm();
 		static final double CIGARETTE_LENGTH = 0.15;
 		static final int FEATHER = 0, WHITE = 1, BEAK = 2, BEAK_LOW = 3, EYE_WHITE = 4, PUPIL = 5, IRIS = 6, FOOT = 7, CLAW = 8, TONGUE = 9, BLACK = 10,
-			FILTER = 11, PAPER = 12, EMBER = 13, ASH = 14;
+			FILTER = 11, PAPER = 12, EMBER = 13, ASH = 14, EMBER_CORE = 15;
 
 		@Override
 		String name() {
@@ -1745,13 +1793,34 @@ public class CharacterModels {
 			return smax(d, p.y - mouthLine(p.z), 0.004); // flat top
 		}
 
-		static double flipper(V p, double s, boolean finger) {
+		/** The flat side of the flippers: they are squashed along this. */
+		static V flipperThin(double s) {
+			return v(s * 0.305, 0.5, 0.042).sub(v(s * 0.232, 1.035, -0.012)).cross(v(0, 0, 1)).norm();
+		}
+
+		/** A flipper down to where its three feathers begin. */
+		static double flipper(V p, double s) {
 			V root = v(s * 0.232, 1.035, -0.012);
 			V mid = v(s * 0.29, 0.78, 0.02);
-			V tip = finger ? v(s * 0.31, 0.6, 0.04) : v(s * 0.305, 0.5, 0.042);
-			V thin = tip.sub(root).cross(v(0, 0, 1)).norm();
+			V end = v(s * 0.3, 0.625, 0.036);
+			V thin = flipperThin(s);
 			double d = squashed(q -> roundCone(q, root, mid, 0.07, 0.054), p, root, thin, 3.4);
-			return smin(d, squashed(q -> roundCone(q, mid, tip, 0.054, 0.026), p, mid, thin, 3.4), 0.03);
+			return smin(d, squashed(q -> roundCone(q, mid, end, 0.054, 0.04), p, mid, thin, 3.4), 0.03);
+		}
+
+		/** Where feather {@code f} (-1 at the back, 1 at the front) of a flipper starts and ends. */
+		static V featherBase(double s, int f) {
+			return v(s * 0.299, 0.645, 0.036 + f * 0.021);
+		}
+
+		static V featherTip(double s, int f) {
+			return v(s * 0.306, f == 0 ? 0.5 : 0.52, 0.042 + f * 0.034);
+		}
+
+		/** One of the three rounded feathers at the end of a flipper, flat like it; they curl like fingers. */
+		static double feather(V p, double s, int f) {
+			V base = featherBase(s, f);
+			return squashed(q -> roundCone(q, base, featherTip(s, f), 0.021, 0.011), p, base, flipperThin(s), 3.4);
 		}
 
 		@Override
@@ -1767,8 +1836,10 @@ public class CharacterModels {
 				addEllipsoidCap(headMesh, eye, EYE_R, look, 19, 1.008, PUPIL);
 				addEllipsoid(headMesh, eye.add(v(s * -0.008 - 0.01, -0.006, EYE_R.z * 0.98)), v(0.0065, 0.007, 0.003), EYE_WHITE);
 			}
-			addCigarette(headMesh);
+			Mesh ember = new Mesh();
+			addCigarette(headMesh, ember);
 			parts.put("head", finish(headMesh, this::paint));
+			parts.put("glow_head", finish(ember, this::paint));
 
 			Mesh jaw = surfaceNets(Penguin::lowerBeak, v(-0.06, 1.2, 0.13), v(0.06, 1.27, 0.34), 0.005);
 			addEllipsoid(jaw, v(0, mouthLine(0.23) - 0.002, 0.225), v(0.017, 0.004, 0.035), TONGUE);
@@ -1779,8 +1850,19 @@ public class CharacterModels {
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				Mesh arm = surfaceNets(p -> flipper(p, s, false), v(s * 0.27 - 0.12, 0.43, -0.12), v(s * 0.27 + 0.12, 1.11, 0.13), 0.0085);
+				Mesh arm = surfaceNets(p -> flipper(p, s), v(s * 0.27 - 0.12, 0.56, -0.12), v(s * 0.27 + 0.12, 1.11, 0.13), 0.0085);
 				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm, (p, n, m, e) -> paintFlipper(p, n, s)));
+				// The flipper bends in the middle, and its three feathers curl toward the body like fingers.
+				this.elbow(s, v(s * 0.29, 0.78, 0.02), v(s * 0.298, 0.66, 0.032));
+				String[] roles = {"little", "middle", "index"};
+				for (int f = -1; f <= 1; f++) {
+					int k = f;
+					V base = featherBase(s, f);
+					V tip = featherTip(s, f);
+					Mesh feather = sdfFinger(p -> feather(p, s, k), base, tip, 0.03, 0.0052, BLACK);
+					this.addFinger(parts, (side < 0 ? "right_" : "left_") + roles[f + 1], finish(feather, (p, n, m, e) -> paintFlipper(p, n, s)),
+						new FingerSpec(base, tip, v(-s, 0, 0), false, new double[] {0, 0.45}, new double[] {65, 70}));
+				}
 
 				Mesh leg = new Mesh();
 				addTube(leg, path(v(s * 0.1, 0.2, 0.0), v(s * 0.105, 0.12, 0.01), v(s * 0.11, 0.06, 0.02)), radii(0.05, 0.046, 0.04), 10, false, FOOT, FOOT);
@@ -1802,26 +1884,21 @@ public class CharacterModels {
 			parts.put("mad_head", finish(mad, this::paint));
 			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, EYE_R, 0.13), (p, n, m, e) -> paint(p, n, BLACK, e)));
 
-			double s = -1;
-			Mesh finger = surfaceNets(p -> flipper(p, s, true), v(s * 0.27 - 0.12, 0.43, -0.12), v(s * 0.27 + 0.12, 1.11, 0.13), 0.0085);
-			// White like the flipper's underside, so it shows against the black head.
-			V tip = v(s * 0.31, 0.6, 0.04);
-			addTube(finger, path(tip.add(v(0, -0.01, 0.0)), tip.add(v(0, -0.004, 0.07)), tip.add(v(0, 0.0, 0.135))), radii(0.021, 0.02, 0.018), 9, false, WHITE,
-				WHITE);
-			parts.put("middle_finger", finish(finger, (p, n, m, e) -> m == WHITE ? rgb(0.94, 0.94, 0.92) : paintFlipper(p, n, s)));
 			return parts;
 		}
 
 		/** A cigarette in the corner of the beak: orange filter, white paper and a glowing tip with a little ash. */
-		static void addCigarette(Mesh m) {
+		static void addCigarette(Mesh m, Mesh glow) {
 			double r = 0.0105;
 			V filterEnd = CIGARETTE.add(CIGARETTE_DIR.mul(0.052));
-			V paperEnd = CIGARETTE.add(CIGARETTE_DIR.mul(CIGARETTE_LENGTH - 0.01));
+			V paperEnd = CIGARETTE.add(CIGARETTE_DIR.mul(CIGARETTE_LENGTH - 0.016));
 			V end = CIGARETTE.add(CIGARETTE_DIR.mul(CIGARETTE_LENGTH));
 			addTube(m, path(CIGARETTE, CIGARETTE.add(CIGARETTE_DIR.mul(0.026)), filterEnd), radii(r, r, r), 10, false, FILTER, FILTER);
 			addTube(m, path(filterEnd, filterEnd.add(paperEnd).mul(0.5), paperEnd), radii(r * 0.99, r * 0.99, r * 0.99), 10, false, PAPER, PAPER);
-			addTube(m, path(paperEnd, paperEnd.add(CIGARETTE_DIR.mul(0.006)), end), radii(r * 0.97, r * 0.95, r * 0.8), 10, false, EMBER, ASH);
-			addEllipsoid(m, end, v(r * 0.75, r * 0.75, r * 0.75), ASH);
+			// The burning tip glows (it is drawn at full brightness, even at night), with gray ash at its very end.
+			addTube(glow, path(paperEnd, paperEnd.add(CIGARETTE_DIR.mul(0.007)), end), radii(r * 0.98, r * 0.96, r * 0.86), 10, false, EMBER, EMBER);
+			addEllipsoid(glow, end.sub(CIGARETTE_DIR.mul(0.002)), v(r * 0.8, r * 0.8, r * 0.8), EMBER_CORE);
+			addEllipsoid(m, end.add(CIGARETTE_DIR.mul(0.004)), v(r * 0.62, r * 0.62, r * 0.5), ASH);
 		}
 
 		static void addFoot(Mesh m, double s) {
@@ -1893,8 +1970,12 @@ public class CharacterModels {
 				}
 				case PAPER:
 					return rgb(0.97, 0.97, 0.95);
-				case EMBER:
-					return rgb(1.0, 0.46, 0.1);
+				case EMBER: {
+					double flicker = noise(p.mul(600)) * 0.12;
+					return rgb(1.0, 0.36 + flicker, 0.06);
+				}
+				case EMBER_CORE:
+					return rgb(1.0, 0.82, 0.42);
 				case ASH:
 					return rgb(0.56 + feather, 0.54 + feather, 0.52 + feather);
 				default:
@@ -2156,7 +2237,8 @@ public class CharacterModels {
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm(s, false), this::paintBody));
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm(s), this::paintBody));
+				this.addHand(parts, s);
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg(s), this::paintBody));
 			}
 
@@ -2170,29 +2252,43 @@ public class CharacterModels {
 			}
 			parts.put("mad_head", finish(mad, this::paintHead));
 			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, EYE_R, 0.08), (p, n, m, e) -> paintHead(p, n, SPONGE, e)));
-			parts.put("middle_finger", finish(arm(-1, true), this::paintBody));
 			return parts;
 		}
 
-		static Mesh arm(double s, boolean middleFinger) {
+		static Mesh arm(double s) {
 			Mesh m = new Mesh();
 			addTube(m, path(v(s * 0.29, 0.53, 0.0), v(s * 0.33, 0.528, 0.0), v(s * 0.372, 0.52, 0.0)), radii(0.05, 0.053, 0.056), 14, false, SHIRT, SHIRT);
 			addTorus(m, v(s * 0.372, 0.52, 0.0), v(1, -0.15 * s, 0).mul(s), 0.054, 0.006, 16, 6, SHIRT); // sleeve hem
 			addTube(m, path(v(s * 0.37, 0.52, 0.0), v(s * 0.41, 0.42, 0.02), v(s * 0.425, 0.31, 0.05)), radii(0.022, 0.021, 0.02), 9, false, SKIN, SKIN);
-			V palm = v(s * 0.428, 0.275, 0.062);
-			if (middleFinger) {
-				addFist(m, palm, v(0.032, 0.038, 0.034), 0.016, 0.1, SKIN, SKIN);
-				return m;
-			}
-			addEllipsoid(m, palm, v(0.03, 0.038, 0.026), SKIN);
+			addEllipsoid(m, palm(s), v(0.03, 0.038, 0.026), SKIN);
+			return m;
+		}
+
+		static V palm(double s) {
+			return v(s * 0.428, 0.275, 0.062);
+		}
+
+		/** Three fingers and a thumb, each a part of its own, curling toward the palm (the body side). The arm bends halfway down. */
+		void addHand(Map<String, Mesh> parts, double s) {
+			String prefix = s < 0 ? "right_" : "left_";
+			this.elbow(s, v(s * 0.405, 0.43, 0.018), v(s * 0.425, 0.305, 0.05));
+			V palm = palm(s);
+			String[] roles = {"little", "middle", "index"};
 			for (int f = 0; f < 3; f++) {
 				double z = palm.z + (f - 1) * 0.019;
-				addTube(m, path(v(palm.x, palm.y - 0.025, z), v(palm.x + s * 0.004, palm.y - 0.05, z + 0.004), v(palm.x, palm.y - 0.072, z + 0.008)),
+				V base = v(palm.x, palm.y - 0.022, z);
+				V tip = v(palm.x, palm.y - 0.08, z + 0.009);
+				Mesh finger = new Mesh();
+				addTube(finger, path(base, v(palm.x + s * 0.004, palm.y - 0.05, z + 0.004), v(palm.x, palm.y - 0.072, z + 0.008)),
 					radii(0.0108, 0.0102, 0.0094), 8, false, SKIN, SKIN);
+				this.addFinger(parts, prefix + roles[f], finish(finger, this::paintBody), new FingerSpec(base, tip, v(-s, 0, 0), false));
 			}
-			addTube(m, path(v(palm.x - s * 0.02, palm.y - 0.005, palm.z + 0.02), v(palm.x - s * 0.03, palm.y - 0.025, palm.z + 0.03),
-				v(palm.x - s * 0.034, palm.y - 0.04, palm.z + 0.032)), radii(0.0102, 0.0097, 0.009), 8, false, SKIN, SKIN);
-			return m;
+			V thumbBase = v(palm.x - s * 0.02, palm.y - 0.005, palm.z + 0.02);
+			Mesh thumb = new Mesh();
+			addTube(thumb, path(thumbBase, v(palm.x - s * 0.03, palm.y - 0.025, palm.z + 0.03), v(palm.x - s * 0.034, palm.y - 0.04, palm.z + 0.032)),
+				radii(0.0102, 0.0097, 0.009), 8, false, SKIN, SKIN);
+			this.addFinger(parts, prefix + "thumb", finish(thumb, this::paintBody),
+				new FingerSpec(thumbBase, v(palm.x - s * 0.035, palm.y - 0.047, palm.z + 0.033), v(-s * 0.4, 0, -1), false));
 		}
 
 		static Mesh leg(double s) {
@@ -2527,8 +2623,8 @@ public class CharacterModels {
 
 		static final double[] FINGER_LENGTH = {0.125, 0.15, 0.15, 0.125};
 
-		/** The hand: a narrow palm, four very long fingers and a thumb. */
-		static double hand(V p, double s, List<V[]> tips) {
+		/** The palm: narrow, with knuckles where the fingers grow out (they are parts of their own) and tendons over its back. */
+		static double palmShape(V p, double s) {
 			V palm = palm(s);
 			double d = ellipsoid(p, palm, v(0.0145, 0.042, 0.029));
 			d = smin(d, sphere(p, wrist(s).add(v(0, -0.012, 0.004)), 0.016), 0.02);
@@ -2536,20 +2632,9 @@ public class CharacterModels {
 				double z = palm.z - 0.022 + f * 0.0145;
 				V base = v(palm.x, palm.y - 0.035, z);
 				d = smin(d, sphere(p, base, 0.0088), 0.006); // knuckle
-				V[] tip = new V[2];
-				d = smin(d, finger(p, base, v(s * 0.02, -1, 0.07), v(0, 0, 0.16), FINGER_LENGTH[f], 0.0074, tip), 0.006);
 				d = smin(d, roundCone(p, palm.add(v(s * -0.008, 0.02, (f - 1.5) * 0.009)), base.add(v(s * -0.006, 0.004, 0)), 0.0028, 0.0035), 0.005); // tendons
-				if (tips != null) {
-					tips.add(tip);
-				}
 			}
-			V thumbBase = v(palm.x - s * 0.006, palm.y - 0.008, palm.z + 0.026);
-			V[] tip = new V[2];
-			d = smin(d, finger(p, thumbBase, v(-s * 0.08, -0.85, 0.42), v(0, 0.02, 0.06), 0.085, 0.0078, tip), 0.008);
-			if (tips != null) {
-				tips.add(tip);
-			}
-			return d;
+			return smin(d, sphere(p, v(palm.x - s * 0.006, palm.y - 0.008, palm.z + 0.026), 0.0085), 0.008);
 		}
 
 		/** A fist with the middle finger pointing forward (+Z), which is up once the arm is raised. */
@@ -2653,7 +2738,8 @@ public class CharacterModels {
 				(p, n, m, e) -> paint(p, n, m, e, "body")));
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(armMesh(s, false), (p, n, m, e) -> paint(p, n, m, e, "arm")));
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(armMesh(s), (p, n, m, e) -> paint(p, n, m, e, "arm")));
+				this.addHand(parts, s);
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(legMesh(s), (p, n, m, e) -> paint(p, n, m, e, "leg")));
 			}
 
@@ -2667,29 +2753,38 @@ public class CharacterModels {
 			parts.put("mad_head", finish(mad, (p, n, m, e) -> m == GLOW ? rgb(1.0, 0.18, 0.08) : paint(p, n, m, e, "head")));
 			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, v(0.018, 0.0145, 0.013), 0.12),
 				(p, n, m, e) -> paint(p, n, SKIN, e, "blink")));
-			parts.put("middle_finger", finish(armMesh(-1, true), (p, n, m, e) -> paint(p, n, m, e, "arm")));
 			return parts;
 		}
 
-		static Mesh armMesh(double s, boolean middleFinger) {
+		static Mesh armMesh(double s) {
 			V sh = shoulder(s);
 			Mesh m = surfaceNets(p -> arm(p, s), v(sh.x - 0.07, 0.76, -0.09), v(sh.x + 0.09, 1.61, 0.06), 0.009);
-			List<V[]> tips = new ArrayList<>();
 			V palm = palm(s);
-			Sdf shape = middleFinger ? p -> fist(p, s, null) : p -> hand(p, s, null);
-			Mesh hand = middleFinger
-				? surfaceNets(shape, v(palm.x - 0.035, 0.68, palm.z - 0.05), v(palm.x + 0.035, 0.81, palm.z + 0.2), 0.0041)
-				: surfaceNets(shape, v(palm.x - 0.05, 0.55, palm.z - 0.05), v(palm.x + 0.05, 0.81, palm.z + 0.11), 0.0041);
-			m.append(hand, SKIN);
-			if (middleFinger) {
-				fist(v(0, 0, 0), s, tips);
-			} else {
-				hand(v(0, 0, 0), s, tips);
-			}
-			for (V[] tip : tips) {
-				addCone(m, tip[0].sub(tip[1].mul(0.004)), tip[0].add(tip[1].mul(0.017)), 0.0052, 6, NAIL);
-			}
+			m.append(surfaceNets(p -> palmShape(p, s), v(palm.x - 0.035, 0.66, palm.z - 0.045), v(palm.x + 0.035, 0.81, palm.z + 0.06), 0.0041), SKIN);
 			return m;
+		}
+
+		/** Four very long knuckled fingers and a thumb, each a part of its own, curling toward the palm (the body side). */
+		void addHand(Map<String, Mesh> parts, double s) {
+			String prefix = s < 0 ? "right_" : "left_";
+			this.elbow(s, elbow(s), wrist(s));
+			V palm = palm(s);
+			String[] roles = {"little", "ring", "middle", "index"};
+			for (int f = 0; f < 4; f++) {
+				double z = palm.z - 0.022 + f * 0.0145;
+				this.addLongFinger(parts, prefix + roles[f], v(palm.x, palm.y - 0.035, z), v(s * 0.02, -1, 0.07), v(0, 0, 0.16), FINGER_LENGTH[f], 0.0074,
+					v(-s, 0, 0));
+			}
+			this.addLongFinger(parts, prefix + "thumb", v(palm.x - s * 0.006, palm.y - 0.008, palm.z + 0.026), v(-s * 0.08, -0.85, 0.42), v(0, 0.02, 0.06),
+				0.085, 0.0078, v(-s * 0.6, 0, -0.8));
+		}
+
+		void addLongFinger(Map<String, Mesh> parts, String name, V base, V dir, V curve, double length, double radius, V curl) {
+			V[] tip = new V[2];
+			finger(v(0, 0, 0), base, dir, curve, length, radius, tip);
+			Mesh m = sdfFinger(p -> finger(p, base, dir, curve, length, radius, null), base, tip[0], radius + 0.012, 0.0041, SKIN);
+			addCone(m, tip[0].sub(tip[1].mul(0.004)), tip[0].add(tip[1].mul(0.017)), 0.0052, 6, NAIL);
+			this.addFinger(parts, name, finish(m, (p, n, mm, e) -> paint(p, n, mm, e, "arm")), new FingerSpec(base, tip[0], curl, false));
 		}
 
 		static Mesh legMesh(double s) {
@@ -2884,7 +2979,8 @@ public class CharacterModels {
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
-				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm(s, false), this::paint));
+				parts.put(side < 0 ? "right_arm" : "left_arm", finish(arm(s), this::paint));
+				this.addHand(parts, s);
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(leg(s), this::paint));
 			}
 
@@ -2901,7 +2997,6 @@ public class CharacterModels {
 			}
 			parts.put("mad_head", finish(mad, this::paint));
 			parts.put("blink_head", finish(blinkLids(new V[] {SIX_EYE, SEVEN_EYE}, EYE_R, 0.2), (p, n, m, e) -> paint(p, n, BRICK, e)));
-			parts.put("middle_finger", finish(arm(-1, true), this::paint));
 			return parts;
 		}
 
@@ -2951,11 +3046,8 @@ public class CharacterModels {
 			addEllipsoid(m, center.add(v(0.014, -0.012, 0.003)), v(0.005, 0.005, 0.002), EYE_WHITE);
 		}
 
-		/**
-		 * A blocky arm hanging from the side of its digit: dark blue upper arm, blue forearm, a light cuff and a white glove.
-		 * The middle finger version makes a fist with the middle finger pointing forward (up, once the arm is raised).
-		 */
-		static Mesh arm(double s, boolean middleFinger) {
+		/** A blocky arm hanging from the side of its digit: dark blue upper arm, blue forearm, a light cuff and a white glove. */
+		static Mesh arm(double s) {
 			Mesh m = new Mesh();
 			V x = v(1, 0, 0);
 			V y = v(0, 1, 0);
@@ -2967,27 +3059,45 @@ public class CharacterModels {
 			addBevelBox(m, v(ax + s * 0.008, shoulder.y - 0.215, 0.004), x, y, z, v(0.04, 0.016, 0.04), 0.006, BRICK, SEAM); // elbow
 			addBevelBox(m, v(ax + s * 0.01, shoulder.y - 0.3, 0.008), x, y, z, v(0.034, 0.075, 0.034), 0.007, BRICK, SEAM);
 			addBevelBox(m, v(ax + s * 0.012, shoulder.y - 0.385, 0.01), x, y, z, v(0.046, 0.024, 0.046), 0.008, CUFF, CUFF);
-			V palm = v(ax + s * 0.012, shoulder.y - 0.45, 0.014);
-			if (middleFinger) {
-				addBevelBox(m, palm, x, y, z, v(0.04, 0.042, 0.044), 0.009, GLOVE, GLOVE);
-				for (int f = 0; f < 4; f++) { // curled fingers along the front, the middle one sticking out
-					double fx = palm.x + s * (f - 1.5) * 0.019;
-					if (f == 2 - (s < 0 ? 1 : 0)) {
-						addBevelBox(m, v(fx, palm.y - 0.018, palm.z + 0.044 + 0.045), x, y, z, v(0.0092, 0.0105, 0.05), 0.004, GLOVE, GLOVE);
-					} else {
-						addBevelBox(m, v(fx, palm.y - 0.022, palm.z + 0.047), x, y, z, v(0.0088, 0.016, 0.012), 0.004, GLOVE, GLOVE);
-					}
-				}
-				addBevelBox(m, v(palm.x - s * 0.026, palm.y + 0.004, palm.z + 0.03), x, y, z, v(0.012, 0.024, 0.014), 0.004, GLOVE, GLOVE); // thumb
-				return m;
-			}
-			addBevelBox(m, palm, x, y, z, v(0.034, 0.045, 0.046), 0.009, GLOVE, GLOVE);
+			addBevelBox(m, palm(s), x, y, z, v(0.034, 0.045, 0.046), 0.009, GLOVE, GLOVE);
+			return m;
+		}
+
+		static V palm(double s) {
+			V shoulder = s < 0 ? RIGHT_SHOULDER : LEFT_SHOULDER;
+			return v(shoulder.x + s * 0.057, shoulder.y - 0.45, 0.014);
+		}
+
+		/**
+		 * The glove's four square fingers and its thumb, each made of two blocks that bend sharply at the knuckle like a
+		 * toy's, and curl toward the palm (the body side).
+		 */
+		void addHand(Map<String, Mesh> parts, double s) {
+			V x = v(1, 0, 0);
+			V y = v(0, 1, 0);
+			V z = v(0, 0, 1);
+			V shoulder = s < 0 ? RIGHT_SHOULDER : LEFT_SHOULDER;
+			double ax = shoulder.x + s * 0.045;
+			this.elbow(s, v(ax + s * 0.008, shoulder.y - 0.215, 0.004), v(ax + s * 0.012, shoulder.y - 0.385, 0.01));
+			String prefix = s < 0 ? "right_" : "left_";
+			V palm = palm(s);
+			String[] roles = {"little", "ring", "middle", "index"};
 			for (int f = 0; f < 4; f++) {
 				double fz = palm.z + (f - 1.5) * 0.023;
-				addBevelBox(m, v(palm.x + s * 0.004, palm.y - 0.068, fz), x, y, z, v(0.026, 0.026, 0.0098), 0.004, GLOVE, GLOVE);
+				double fx = palm.x + s * 0.004;
+				Mesh finger = new Mesh();
+				addBevelBox(finger, v(fx, palm.y - 0.0555, fz), x, y, z, v(0.026, 0.0145, 0.0098), 0.004, GLOVE, GLOVE);
+				addBevelBox(finger, v(fx, palm.y - 0.0805, fz), x, y, z, v(0.026, 0.0135, 0.0098), 0.004, GLOVE, GLOVE);
+				this.addFinger(parts, prefix + roles[f], finish(finger, this::paint), new FingerSpec(v(fx, palm.y - 0.042, fz), v(fx, palm.y - 0.094, fz),
+					v(-s, 0, 0), true, new double[] {0, 0.5}, new double[] {85, 85}));
 			}
-			addBevelBox(m, v(palm.x - s * 0.03, palm.y - 0.006, palm.z + 0.034), x, y, z, v(0.012, 0.03, 0.012), 0.004, GLOVE, GLOVE); // thumb
-			return m;
+			Mesh thumb = new Mesh();
+			double tx = palm.x - s * 0.03;
+			double tz = palm.z + 0.034;
+			addBevelBox(thumb, v(tx, palm.y + 0.009, tz), x, y, z, v(0.012, 0.016, 0.012), 0.004, GLOVE, GLOVE);
+			addBevelBox(thumb, v(tx, palm.y - 0.02, tz), x, y, z, v(0.012, 0.015, 0.012), 0.004, GLOVE, GLOVE);
+			this.addFinger(parts, prefix + "thumb", finish(thumb, this::paint), new FingerSpec(v(tx, palm.y + 0.024, tz), v(tx, palm.y - 0.036, tz),
+				v(-s * 0.5, 0, -1), true, new double[] {0, 0.5}, new double[] {35, 60}));
 		}
 
 		/** A blocky blue leg with a dark knee band, and a light gray-blue shoe on a white sole. */
@@ -3289,25 +3399,46 @@ public class CharacterModels {
 			return d;
 		}
 
-		/** A relaxed open hand, fingers a little curled toward the front. */
-		static double openHand(V p, double s, List<V[]> tips) {
+		/** The palm of the open (left) hand, with knuckles where its fingers grow out (they are parts of their own). */
+		static double openPalm(V p, double s) {
 			V palm = v(s * 0.198, 0.478, 0.048);
 			double d = ellipsoid(p, palm, v(0.016, 0.034, 0.026));
 			d = smin(d, SkinnyAlien.sphere(p, v(s * 0.196, 0.522, 0.042), 0.019), 0.015);
 			for (int f = -1; f <= 2; f++) {
+				d = smin(d, SkinnyAlien.sphere(p, v(s * 0.199, 0.448, 0.048 + f * 0.0115 - 0.006), 0.0072), 0.004);
+			}
+			return smin(d, SkinnyAlien.sphere(p, v(s * 0.19, 0.49, 0.072), 0.0075), 0.005);
+		}
+
+		/**
+		 * The left hand's four fingers and thumb, a little curled toward the front, each a part of its own that curls toward
+		 * the palm (the body side), with a pink nail. {@code prefix} is "left_" or "fp_left_".
+		 */
+		void addOpenHand(Map<String, Mesh> parts, String prefix, boolean detailed) {
+			double s = 1;
+			String[] roles = {"little", "ring", "middle", "index"};
+			for (int f = -1; f <= 2; f++) {
 				V root = v(s * 0.199, 0.448, 0.048 + f * 0.0115 - 0.006);
-				V[] tip = new V[2];
-				d = smin(d, SkinnyAlien.finger(p, root, v(s * 0.05, -1, 0.06), v(0, 0, 0.09), 0.072 - Math.abs(f - 0.5) * 0.008, 0.0062, tip), 0.004);
-				if (tips != null) {
-					tips.add(tip);
-				}
+				this.addQueenFinger(parts, prefix, roles[f + 1], root, v(s * 0.05, -1, 0.06), v(0, 0, 0.09), 0.072 - Math.abs(f - 0.5) * 0.008, 0.0062,
+					v(-s, 0, 0), detailed);
 			}
-			V[] thumb = new V[2];
-			d = smin(d, SkinnyAlien.finger(p, v(s * 0.19, 0.49, 0.072), v(-s * 0.2, -0.7, 0.6), v(0, 0, 0.05), 0.045, 0.0068, thumb), 0.005);
-			if (tips != null) {
-				tips.add(thumb);
+			this.addQueenFinger(parts, prefix, "thumb", v(s * 0.19, 0.49, 0.072), v(-s * 0.2, -0.7, 0.6), v(0, 0, 0.05), 0.045, 0.0068, v(-s * 0.6, 0, -0.8),
+				detailed);
+		}
+
+		void addQueenFinger(Map<String, Mesh> parts, String prefix, String role, V base, V dir, V curve, double length, double radius, V curl,
+			boolean detailed) {
+			V[] tip = new V[2];
+			SkinnyAlien.finger(v(0, 0, 0), base, dir, curve, length, radius, tip);
+			Mesh m = sdfFinger(p -> SkinnyAlien.finger(p, base, dir, curve, length, radius, null), base, tip[0], radius + 0.01, detailed ? 0.0031 : 0.0042,
+				IVORY);
+			addCone(m, tip[0].sub(tip[1].mul(0.003)), tip[0].add(tip[1].mul(0.011)), 0.0048, 6, NAIL);
+			Mesh finished = finish(m, this::paint);
+			if (prefix.startsWith("fp_")) {
+				parts.put(prefix + role, finished);
+			} else {
+				this.addFinger(parts, prefix + role, finished, new FingerSpec(base, tip[0], curl, false));
 			}
-			return d;
 		}
 
 		/** A fist with the middle finger pointing forward (+Z), which is up once the arm is raised. */
@@ -3345,8 +3476,7 @@ public class CharacterModels {
 				hand = p -> gripHand(p, null);
 				gripHand(v(0, 0, 0), tips);
 			} else {
-				hand = p -> openHand(p, s, null);
-				openHand(v(0, 0, 0), s, tips);
+				hand = p -> openPalm(p, s);
 			}
 			m.append(surfaceNets(hand, v(s * 0.195 - 0.05, 0.36, -0.01), v(s * 0.195 + 0.05, 0.56, 0.19), detailed ? 0.0031 : 0.0042), IVORY);
 			for (V[] tip : tips) {
@@ -3359,9 +3489,13 @@ public class CharacterModels {
 				double a = 2 * Math.PI * k / pearls;
 				addSphere(m, wrist.add(v(Math.cos(a) * 0.024, 0.004 * Math.sin(3 * a), Math.sin(a) * 0.024)), 0.0065, CARVE);
 			}
-			if (s < 0 && !middleFinger) {
-				addRifle(m, detailed);
-			}
+			return m;
+		}
+
+		/** The sniper rifle, held in the right hand: a part of its own, so it stays in the hand when the elbow bends. */
+		Mesh buildRifle(boolean detailed) {
+			Mesh m = new Mesh();
+			addRifle(m, detailed);
 			return m;
 		}
 
@@ -3573,7 +3707,12 @@ public class CharacterModels {
 
 			parts.put("body", finish(surfaceNets(WhiteQueen::bodyPart, v(-0.32, -0.005, -0.32), v(0.32, 0.92, 0.32), 0.0158), this::paint));
 			parts.put("right_arm", finish(this.buildArm(-1, false, false), this::paint));
+			parts.put("right_hand", finish(this.buildRifle(false), this::paint));
 			parts.put("left_arm", finish(this.buildArm(1, false, false), this::paint));
+			this.addOpenHand(parts, "left_", false);
+			for (int side = -1; side <= 1; side += 2) {
+				this.elbow(side, v(side * 0.183, 0.77, 0.012), v(side * 0.194, 0.532, 0.042));
+			}
 
 			Mesh mad = new Mesh();
 			addBrows(mad, true);
@@ -3584,9 +3723,11 @@ public class CharacterModels {
 			parts.put("mad_head", finish(mad, this::paint));
 			parts.put("blink_head", finish(blinkLids(new V[] {EYE.withX(-EYE.x), EYE}, EYE_R.mul(1.06), 0.14), (p, n, m, e) -> this.paint(p, n, IVORY, e)));
 			parts.put("middle_finger", finish(this.buildArm(-1, true, false), this::paint));
-			parts.put("glow_right_arm", finish(lensGlow(), (p, n, m, e) -> rgb(0.45, 0.9, 1.0)));
+			parts.put("glow_right_hand", finish(lensGlow(), (p, n, m, e) -> rgb(0.45, 0.9, 1.0)));
 			parts.put("fp_right_arm", finish(this.buildArm(-1, false, true), this::paint));
+			parts.put("fp_right_hand", finish(this.buildRifle(true), this::paint));
 			parts.put("fp_left_arm", finish(this.buildArm(1, false, true), this::paint));
+			this.addOpenHand(parts, "fp_left_", true);
 			parts.put("fp_middle_finger", finish(this.buildArm(-1, true, true), this::paint));
 			return parts;
 		}
@@ -3888,8 +4029,7 @@ public class CharacterModels {
 			addEllipsoid(m, paw.add(v(0, -0.025, 0.01)), v(0.055, 0.035, 0.06), FUR);
 			addEllipsoid(m, paw.add(v(0, -0.055, 0.0)), v(0.035, 0.012, 0.035), PAD);
 			for (int t = 0; t < 4; t++) {
-				double a = Math.toRadians((t - 1.5) * 22);
-				V toe = paw.add(v(Math.sin(a) * 0.04, -0.045, 0.045 + Math.cos(a) * 0.03 - Math.abs(t - 1.5) * 0.008));
+				V toe = toe(paw, t);
 				boolean middle = finger && t == (s < 0 ? 1 : 2);
 				if (middle) {
 					// The middle toe, long like a finger, pointing forward (up once the leg is raised).
@@ -3897,14 +4037,67 @@ public class CharacterModels {
 					addCone(m, toe.add(v(0, 0.036, 0.135)), toe.add(v(0, 0.04, 0.17)), 0.009, 6, CLAW);
 					continue;
 				}
-				addEllipsoid(m, toe, v(0.019, 0.017, 0.022), FUR);
-				addEllipsoid(m, toe.add(v(0, -0.012, 0.002)), v(0.012, 0.006, 0.012), PAD);
-				addCone(m, toe.add(v(0, -0.002, 0.016)), toe.add(v(Math.sin(a) * 0.01, -0.016, 0.042)), 0.0075, 6, CLAW);
+				if (!front || finger) {
+					addToe(m, paw, t);
+				}
 			}
-			if (front) {
-				V dew = paw.add(v(-s * 0.04, 0.03, -0.01));
-				addEllipsoid(m, dew, v(0.012, 0.016, 0.012), FUR);
-				addCone(m, dew.add(v(0, -0.008, 0.006)), dew.add(v(-s * 0.006, -0.02, 0.02)), 0.005, 5, CLAW);
+			if (front && finger) {
+				addDewclaw(m, paw, s);
+			}
+		}
+
+		/** Where toe {@code t} (0 to 3, across the paw) sits on a paw. */
+		static V toe(V paw, int t) {
+			double a = Math.toRadians((t - 1.5) * 22);
+			return paw.add(v(Math.sin(a) * 0.04, -0.045, 0.045 + Math.cos(a) * 0.03 - Math.abs(t - 1.5) * 0.008));
+		}
+
+		/** A toe: furry, with a pad under it and a claw. Returns the tip of the claw. */
+		static V addToe(Mesh m, V paw, int t) {
+			double a = Math.toRadians((t - 1.5) * 22);
+			V toe = toe(paw, t);
+			addEllipsoid(m, toe, v(0.019, 0.017, 0.022), FUR);
+			addEllipsoid(m, toe.add(v(0, -0.012, 0.002)), v(0.012, 0.006, 0.012), PAD);
+			V tip = toe.add(v(Math.sin(a) * 0.01, -0.016, 0.042));
+			addCone(m, toe.add(v(0, -0.002, 0.016)), tip, 0.0075, 6, CLAW);
+			return tip;
+		}
+
+		static V addDewclaw(Mesh m, V paw, double s) {
+			V dew = paw.add(v(-s * 0.04, 0.03, -0.01));
+			addEllipsoid(m, dew, v(0.012, 0.016, 0.012), FUR);
+			V tip = dew.add(v(-s * 0.006, -0.02, 0.02));
+			addCone(m, dew.add(v(0, -0.008, 0.006)), tip, 0.005, 5, CLAW);
+			return tip;
+		}
+
+		/**
+		 * The front paws' four toes and dewclaw, each a part of its own that curls down toward the pads (the dewclaw is the
+		 * thumb). {@code prefix} is "right_", "left_" or "fp_right_"...
+		 */
+		void addFrontToes(Map<String, Mesh> parts, String prefix, double s) {
+			V paw = v(s * 0.15, 0.075, 0.46);
+			// Across the paw from the inside (next to the dewclaw) out: index, middle, ring and little toe.
+			String[] roles = {"index", "middle", "ring", "little"};
+			for (int k = 0; k < 4; k++) {
+				int t = s < 0 ? 3 - k : k;
+				Mesh m = new Mesh();
+				V tip = addToe(m, paw, t);
+				V base = toe(paw, t).add(v(0, 0.006, -0.02));
+				this.addPawPart(parts, prefix, roles[k], m, new FingerSpec(base, tip, v(0, -1, -0.35), false, new double[] {0, 0.45}, new double[] {45, 55}));
+			}
+			Mesh dew = new Mesh();
+			V tip = addDewclaw(dew, paw, s);
+			this.addPawPart(parts, prefix, "thumb", dew, new FingerSpec(paw.add(v(-s * 0.04, 0.045, -0.016)), tip, v(s * 0.3, 0, -1), false,
+				new double[] {0, 0.5}, new double[] {30, 40}));
+		}
+
+		void addPawPart(Map<String, Mesh> parts, String prefix, String role, Mesh m, FingerSpec spec) {
+			Mesh finished = finish(m, this::paint);
+			if (prefix.startsWith("fp_")) {
+				parts.put(prefix + role, finished);
+			} else {
+				this.addFinger(parts, prefix + role, finished, spec);
 			}
 		}
 
@@ -3959,17 +4152,17 @@ public class CharacterModels {
 			if (glowOnly) {
 				return tailFlame(curve);
 			}
-			Mesh m = surfaceNets(p -> tail(p, curve, null), v(-0.9, 0.82, -1.55), v(0.9, 2.05, -0.5), 0.0215);
+			Mesh m = surfaceNets(p -> tail(p, curve, null), v(-0.9, 0.82, -1.55), v(0.9, 2.05, -0.5), 0.034);
 			// Fur tufts sticking out backward along the tail.
 			java.util.Random random = new java.util.Random(77 + side);
-			for (int k = 0; k < 45; k++) {
+			for (int k = 0; k < 26; k++) {
 				double t = 0.12 + 0.8 * random.nextDouble();
 				V center = along(curve, t);
 				V dirAlong = along(curve, Math.min(1, t + 0.02)).sub(along(curve, Math.max(0, t - 0.02))).norm();
 				V out = randomPerpendicular(dirAlong, random);
 				V root = center.add(out.mul(tailRadius(t) * 0.85));
 				V tip = root.add(out.mul(0.03 + 0.05 * random.nextDouble())).add(dirAlong.mul(0.05 + 0.04 * random.nextDouble()));
-				addCone(m, root, tip, 0.018 + 0.012 * random.nextDouble(), 5, FUR);
+				addCone(m, root, tip, 0.021 + 0.014 * random.nextDouble(), 4, FUR);
 			}
 			return m;
 		}
@@ -4035,6 +4228,10 @@ public class CharacterModels {
 		 * @param region where tufts go (points with region(p) < 0)
 		 */
 		static void addTufts(Mesh m, Sdf surface, Sdf region, V min, V max, int count, double length, double radius, V sweep, long seed) {
+			addTufts(m, surface, region, min, max, count, length, radius, sweep, seed, 4);
+		}
+
+		static void addTufts(Mesh m, Sdf surface, Sdf region, V min, V max, int count, double length, double radius, V sweep, long seed, int seg) {
 			java.util.Random random = new java.util.Random(seed);
 			int placed = 0;
 			for (int tries = 0; tries < count * 40 && placed < count; tries++) {
@@ -4049,7 +4246,7 @@ public class CharacterModels {
 				V normal = gradient(surface, root, 0.003).norm();
 				V dir = normal.mul(0.55).add(sweep.norm().mul(0.75)).norm();
 				double len = length * (0.6 + 0.8 * random.nextDouble());
-				addCone(m, root.sub(normal.mul(0.008)), root.add(dir.mul(len)), radius * (0.7 + 0.6 * random.nextDouble()), 5, FUR);
+				addCone(m, root.sub(normal.mul(0.008)), root.add(dir.mul(len)), radius * (0.7 + 0.6 * random.nextDouble()), seg, FUR);
 				placed++;
 			}
 		}
@@ -4079,34 +4276,36 @@ public class CharacterModels {
 		@Override
 		Map<String, Mesh> build() {
 			Map<String, Mesh> parts = new LinkedHashMap<>();
-			Mesh head = surfaceNets(BlackWolf::head, v(-0.24, 1.26, 0.56), v(0.24, 1.6, 1.3), 0.0094);
+			Mesh head = surfaceNets(BlackWolf::head, v(-0.24, 1.26, 0.56), v(0.24, 1.6, 1.3), 0.0152);
 			addNoseAndEars(head);
 			addTeeth(head, true);
 			addTufts(head, BlackWolf::skull, p -> Math.min(Math.min(ellipsoid(p, v(0.12, 1.34, 0.83), v(0.075, 0.075, 0.085)),
 				ellipsoid(p, v(-0.12, 1.34, 0.83), v(0.075, 0.075, 0.085))), ellipsoid(p, v(0, 1.44, 0.68), v(0.16, 0.1, 0.09))),
-				v(-0.25, 1.25, 0.55), v(0.25, 1.58, 0.95), 70, 0.05, 0.02, v(0, -0.3, -1), 11);
+				v(-0.25, 1.25, 0.55), v(0.25, 1.58, 0.95), 42, 0.056, 0.023, v(0, -0.3, -1), 11);
 			parts.put("head", finish(head, this::paint));
 
-			Mesh jaw = surfaceNets(p -> smax(lowerJaw(p), -cavity(p), 0.005), v(-0.12, 1.16, 0.76), v(0.12, 1.32, 1.22), 0.0092);
+			Mesh jaw = surfaceNets(p -> smax(lowerJaw(p), -cavity(p), 0.005), v(-0.12, 1.16, 0.76), v(0.12, 1.32, 1.22), 0.0138);
 			addTeeth(jaw, false);
 			addEllipsoid(jaw, v(0, 1.287, 1.02), v(0.035, 0.009, 0.12), TONGUE);
-			addTufts(jaw, BlackWolf::lowerJaw, p -> ellipsoid(p, v(0, 1.22, 0.9), v(0.09, 0.06, 0.1)), v(-0.1, 1.15, 0.8), v(0.1, 1.28, 1.0), 16, 0.04,
-				0.015, v(0, -1, -0.3), 12);
+			addTufts(jaw, BlackWolf::lowerJaw, p -> ellipsoid(p, v(0, 1.22, 0.9), v(0.09, 0.06, 0.1)), v(-0.1, 1.15, 0.8), v(0.1, 1.28, 1.0), 10, 0.045,
+				0.017, v(0, -1, -0.3), 12);
 			parts.put("jaw", finish(jaw, this::paint));
 
-			Mesh body = surfaceNets(BlackWolf::bodyShape, v(-0.32, 0.55, -0.84), v(0.32, 1.44, 0.92), 0.0195);
+			Mesh body = surfaceNets(BlackWolf::bodyShape, v(-0.32, 0.55, -0.84), v(0.32, 1.44, 0.92), 0.031);
 			// A mane of tufts around the neck and chest, and shaggy fur along the back and the belly.
-			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 1.02, 0.55), v(0.26, 0.28, 0.24)), v(-0.3, 0.7, 0.3), v(0.3, 1.32, 0.82), 130, 0.085,
-				0.032, v(0, -0.3, -1), 21);
-			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 1.08, -0.1), v(0.12, 0.08, 0.6)), v(-0.15, 0.95, -0.7), v(0.15, 1.2, 0.5), 60, 0.05,
-				0.022, v(0, 0.1, -1), 22);
-			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 0.62, 0.0), v(0.18, 0.1, 0.42)), v(-0.2, 0.55, -0.4), v(0.2, 0.75, 0.45), 50, 0.06,
-				0.02, v(0, -1, -0.2), 23);
+			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 1.02, 0.55), v(0.26, 0.28, 0.24)), v(-0.3, 0.7, 0.3), v(0.3, 1.32, 0.82), 80, 0.095,
+				0.037, v(0, -0.3, -1), 21);
+			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 1.08, -0.1), v(0.12, 0.08, 0.6)), v(-0.15, 0.95, -0.7), v(0.15, 1.2, 0.5), 36, 0.058,
+				0.026, v(0, 0.1, -1), 22);
+			addTufts(body, BlackWolf::bodyShape, p -> ellipsoid(p, v(0, 0.62, 0.0), v(0.18, 0.1, 0.42)), v(-0.2, 0.55, -0.4), v(0.2, 0.75, 0.45), 28, 0.066,
+				0.024, v(0, -1, -0.2), 23);
 			parts.put("body", finish(body, this::paint));
 
 			for (int side = -1; side <= 1; side += 2) {
 				double s = side;
 				parts.put(side < 0 ? "right_arm" : "left_arm", finish(this.buildFrontLeg(s, false, false), this::paint));
+				this.addFrontToes(parts, side < 0 ? "right_" : "left_", s);
+				this.elbow(s, v(s * 0.162, 0.62, 0.33), v(s * 0.152, 0.18, 0.41));
 				parts.put(side < 0 ? "right_leg" : "left_leg", finish(this.buildHindLeg(s), this::paint));
 			}
 			for (int i = 0; i < TAILS.length; i++) {
@@ -4161,29 +4360,31 @@ public class CharacterModels {
 				(p, n, m, e) -> this.paint(p, n, FUR, e)));
 			parts.put("middle_finger", finish(this.buildFrontLeg(-1, true, false), this::paint));
 			parts.put("fp_right_arm", finish(this.buildFrontLeg(-1, false, true), this::paint));
+			this.addFrontToes(parts, "fp_right_", -1);
 			parts.put("fp_left_arm", finish(this.buildFrontLeg(1, false, true), this::paint));
+			this.addFrontToes(parts, "fp_left_", 1);
 			parts.put("fp_middle_finger", finish(this.buildFrontLeg(-1, true, true), this::paint));
 			return parts;
 		}
 
 		Mesh buildFrontLeg(double s, boolean finger, boolean detailed) {
 			V shoulder = s < 0 ? RIGHT_SHOULDER : LEFT_SHOULDER;
-			Mesh m = surfaceNets(p -> frontLeg(p, s), v(shoulder.x - 0.13, 0.04, 0.18), v(shoulder.x + 0.13, 1.1, 0.6), detailed ? 0.0098 : 0.0165);
+			Mesh m = surfaceNets(p -> frontLeg(p, s), v(shoulder.x - 0.13, 0.04, 0.18), v(shoulder.x + 0.13, 1.1, 0.6), detailed ? 0.0098 : 0.0255);
 			addPaw(m, v(s * 0.15, 0.075, 0.46), s, true, finger, detailed);
 			// Shaggy tufts behind the elbow and down the back of the leg.
 			addTufts(m, p -> frontLeg(p, s), p -> ellipsoid(p, v(s * 0.16, 0.55, 0.28), v(0.12, 0.22, 0.08)), v(shoulder.x - 0.12, 0.3, 0.2),
-				v(shoulder.x + 0.12, 0.8, 0.4), detailed ? 50 : 22, 0.05, 0.018, v(0, -0.6, -1), 31 + (long) s);
+				v(shoulder.x + 0.12, 0.8, 0.4), detailed ? 50 : 13, 0.056, 0.021, v(0, -0.6, -1), 31 + (long) s, detailed ? 5 : 4);
 			addTufts(m, p -> frontLeg(p, s), p -> ellipsoid(p, v(s * 0.16, 0.88, 0.42), v(0.11, 0.12, 0.13)), v(shoulder.x - 0.12, 0.75, 0.3),
-				v(shoulder.x + 0.12, 1.05, 0.56), detailed ? 30 : 14, 0.045, 0.02, v(0, -1, -0.4), 33 + (long) s);
+				v(shoulder.x + 0.12, 1.05, 0.56), detailed ? 30 : 8, 0.05, 0.023, v(0, -1, -0.4), 33 + (long) s, detailed ? 5 : 4);
 			return m;
 		}
 
 		Mesh buildHindLeg(double s) {
 			V hip = s < 0 ? RIGHT_HIP : LEFT_HIP;
-			Mesh m = surfaceNets(p -> hindLeg(p, s), v(hip.x - 0.14, 0.04, -0.8), v(hip.x + 0.14, 1.08, -0.2), 0.0165);
+			Mesh m = surfaceNets(p -> hindLeg(p, s), v(hip.x - 0.14, 0.04, -0.8), v(hip.x + 0.14, 1.08, -0.2), 0.0255);
 			addPaw(m, v(s * 0.155, 0.075, -0.52), s, false, false, false);
 			addTufts(m, p -> hindLeg(p, s), p -> ellipsoid(p, v(s * 0.16, 0.62, -0.55), v(0.12, 0.2, 0.1)), v(hip.x - 0.13, 0.4, -0.72), v(hip.x + 0.13, 0.85, -0.4),
-				26, 0.055, 0.02, v(0, -0.4, -1), 41 + (long) s);
+				15, 0.062, 0.024, v(0, -0.4, -1), 41 + (long) s);
 			return m;
 		}
 
@@ -4999,6 +5200,23 @@ public class CharacterModels {
 		for (Map.Entry<String, V> joint : design.extraJoints().entrySet()) {
 			joints.append(",\n\t\t\"").append(joint.getKey()).append("\": { \"pivot\": ").append(arr(joint.getValue())).append(" }");
 		}
+		for (Map.Entry<String, FingerSpec> finger : design.fingerSpecs.entrySet()) {
+			FingerSpec f = finger.getValue();
+			joints.append(",\n\t\t\"").append(finger.getKey()).append("\": { \"pivot\": ").append(arr(f.base())).append(", \"tip\": ").append(arr(f.tip()))
+				.append(", \"curl\": ").append(arr(f.curl().norm()));
+			if (f.joints() != null) {
+				joints.append(", \"joints\": ").append(list(f.joints()));
+			}
+			if (f.angles() != null) {
+				joints.append(", \"angles\": ").append(list(f.angles()));
+			}
+			if (f.rigid()) {
+				joints.append(", \"rigid\": true");
+			}
+			joints.append(" }");
+		}
+		String rightElbow = armJointJson(design, "right");
+		String leftElbow = armJointJson(design, "left");
 		String json = """
 			{
 				"name": "%s",
@@ -5009,15 +5227,30 @@ public class CharacterModels {
 					"head": { "pivot": %s },
 					"jaw": { "pivot": %s },
 					"body": { "pivot": %s },
-					"right_arm": { "pivot": %s, "hand": %s },
-					"left_arm": { "pivot": %s, "hand": %s },
+					"right_arm": { "pivot": %s, "hand": %s%s },
+					"left_arm": { "pivot": %s, "hand": %s%s },
 					"right_leg": { "pivot": %s },
 					"left_leg": { "pivot": %s }%s
 				}
 			}
 			""".formatted(design.displayName(), fmt(r.jawAngle()), arr(r.butt()), extra, arr(r.head()), arr(r.jaw()), arr(r.body()),
-			arr(r.rightArm()), arr(r.rightHand()), arr(r.leftArm()), arr(r.leftHand()), arr(r.rightLeg()), arr(r.leftLeg()), joints);
+			arr(r.rightArm()), arr(r.rightHand()), rightElbow, arr(r.leftArm()), arr(r.leftHand()), leftElbow, arr(r.rightLeg()), arr(r.leftLeg()), joints);
 		Files.writeString(file, json.replace("\t", "  "), StandardCharsets.UTF_8);
+	}
+
+	/** {@code , "elbow": [...], "wrist": [...]} for an arm, or nothing if the design didn't say. */
+	static String armJointJson(Design design, String side) {
+		V elbow = design.armJoints.get(side + "_elbow");
+		V wrist = design.armJoints.get(side + "_wrist");
+		return elbow == null ? "" : ", \"elbow\": " + arr(elbow) + ", \"wrist\": " + arr(wrist);
+	}
+
+	static String list(double[] values) {
+		StringBuilder s = new StringBuilder("[");
+		for (int i = 0; i < values.length; i++) {
+			s.append(i > 0 ? ", " : "").append(fmt(values[i]));
+		}
+		return s.append("]").toString();
 	}
 
 	static String arr(V p) {

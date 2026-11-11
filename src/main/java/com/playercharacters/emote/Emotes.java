@@ -195,7 +195,8 @@ public final class Emotes {
 
 	/**
 	 * Fortnite's Default Dance, which comes from the "Turk" dance: stepping in place with the knees coming up while the
-	 * fists pump back and forth, then both arms thrown up and slammed down, a point forward, and arms crossed to finish.
+	 * fists pump back and forth with bent elbows, then both arms thrown up and slammed down, a point forward, and arms
+	 * crossed to finish.
 	 */
 	private static void defaultDance(EmotePose p, float t) {
 		float c = t % 4.0F;
@@ -203,14 +204,18 @@ public final class Emotes {
 		EmotePose steps = new EmotePose();
 		steps.rightLeg(-44 * Math.max(0, s), 0, 4).leftLeg(-44 * Math.max(0, -s), 0, -4);
 		// The arm on the side of the foot that is down swings forward, like when running.
-		steps.rightArm(-22 + 46 * s, 10, 6).leftArm(-22 - 46 * s, -10, -6);
+		steps.rightArm(-16 + 42 * s, 10, 8).leftArm(-16 - 42 * s, -10, -8).rightElbow(92 - 22 * s).leftElbow(92 + 22 * s).hands(HandShape.FIST);
 		steps.body(7, 12 * s, 0).head(-4, -9 * s, 3 * s).move(0, 0.07F * hop(t, 0.5F), 0);
-		EmotePose up = new EmotePose().rightArm(-168, 0, 18).leftArm(-168, 0, -18).head(-18, 0, 0).body(-4, 0, 0).move(0, 0.13F, 0);
-		EmotePose slam = new EmotePose().rightArm(-12, 0, 28).leftArm(-12, 0, -28).body(20, 0, 0).head(14, 0, 0).rightLeg(-28, 0, 7).leftLeg(-28, 0, -7);
+		EmotePose up = new EmotePose().rightArm(-168, 0, 18).leftArm(-168, 0, -18).elbows(14).hands(HandShape.OPEN).head(-18, 0, 0).body(-4, 0, 0)
+			.move(0, 0.13F, 0);
+		EmotePose slam = new EmotePose().rightArm(-14, 0, 28).leftArm(-14, 0, -28).elbows(24).hands(HandShape.FIST).body(20, 0, 0).head(14, 0, 0)
+			.rightLeg(-28, 0, 7).leftLeg(-28, 0, -7);
 		slam.hipDrop = 0.13F;
-		EmotePose point = new EmotePose().rightArmTo(0.12F, 0.12F, 1.0F).leftArmTo(-0.12F, 0.12F, 1.0F).body(10, 0, 0).head(-6, 0, 0)
-			.rightLeg(-10, 0, 3).leftLeg(4, 0, -3);
-		EmotePose cross = new EmotePose().rightArm(-78, 42, 0).leftArm(-74, -42, 0).body(-7, -8, 0).head(-7, 6, 7).leftLeg(-6, 0, 10).rightLeg(2, 0, 2);
+		EmotePose point = new EmotePose().rightArmTo(0.12F, 0.12F, 1.0F).leftArmTo(-0.12F, 0.12F, 1.0F).elbows(8).hands(HandShape.POINT).body(10, 0, 0)
+			.head(-6, 0, 0).rightLeg(-10, 0, 3).leftLeg(4, 0, -3);
+		// Arms folded in front of the chest, each hand at the other arm.
+		EmotePose cross = new EmotePose().rightHandAt(0.8F, -0.02F, 0.3F, -0.3F, -1, 0.4F).leftHandAt(-0.8F, 0.06F, 0.36F, 0.3F, -1, 0.4F)
+			.hands(HandShape.FIST).body(-7, -8, 0).head(-7, 6, 7).leftLeg(-6, 0, 10).rightLeg(2, 0, 2);
 		cross.shoulderLift = 0.6F;
 		p.copyFrom(keyframes(c, new float[] {0.0F, 1.95F, 2.25F, 2.45F, 2.75F, 2.95F, 3.3F, 3.5F, 3.85F, 4.0F},
 			steps, steps, up, slam, slam, point, point, cross, cross, steps));
@@ -234,10 +239,14 @@ public final class Emotes {
 		return out;
 	}
 
-	/** Both hands held out palms up, going up and down in turns like scales, while the head bobs: "six, seven". */
+	/**
+	 * "Six, seven": the forearms held out in front, palms up, going up and down in turns like scales, while the head
+	 * bobs.
+	 */
 	private static void sixSeven(EmotePose p, float t) {
 		float s = wave(t, 0.8F);
-		p.rightArmTo(0.12F, -0.32F + 0.34F * s, 1.0F, 90).leftArmTo(-0.12F, -0.32F - 0.34F * s, 1.0F, -90);
+		p.rightArm(-20 + 12 * s, 0, 12).leftArm(-20 - 12 * s, 0, -12);
+		p.rightElbow(84 + 32 * s, 90).leftElbow(84 - 32 * s, 90).hands(HandShape.OPEN);
 		p.head(4, 14 * wave(t, 1.6F), 10 * wave(t, 1.6F, 0.25F)).body(3, 6 * s, 0);
 		p.move(0, 0.03F * hop(t, 0.4F), 0);
 		p.jaw = Math.max(0, wave(t, 0.8F, 0.1F)) * 0.7F;
@@ -249,25 +258,28 @@ public final class Emotes {
 	 */
 	private static void floss(EmotePose p, float t) {
 		float s = wave(t, 0.6F);
-		p.rightArmTo(0.9F * s, -1.0F, 0.5F * s).leftArmTo(0.9F * s, -1.0F, -0.5F * s);
+		p.rightArmTo(0.9F * s, -1.0F, 0.5F * s).leftArmTo(0.9F * s, -1.0F, -0.5F * s).elbows(10).hands(HandShape.FIST);
 		p.body(0, 6 * s, -8 * s).head(0, -4 * s, 5 * s).rightLeg(0, 0, -4 * s).leftLeg(0, 0, -4 * s);
 		p.move(-0.08F * s, 0.02F * hop(t, 0.3F), 0);
 	}
 
 	/**
 	 * The Griddy: leaning forward, heels tapping out in front in turns with a little skip, arms swinging hard the other
-	 * way, then both hands up around the eyes like goggles. It travels: walk while doing it.
+	 * way, then both hands around the eyes like goggles. It travels: walk while doing it.
 	 */
 	private static void griddy(EmotePose p, float t) {
 		float s = wave(t, 0.7F);
 		EmotePose steps = new EmotePose();
 		steps.body(18, 6 * s, 0).head(-14, -4 * s, 0);
 		steps.rightLeg(10 - 48 * Math.max(0, s), 0, 3).leftLeg(10 - 48 * Math.max(0, -s), 0, -3);
-		steps.rightArm(55 * s, 0, 14).leftArm(-55 * s, 0, -14);
-		steps.move(0, 0.05F * hop(t, 0.35F), 0.035F * s);
+		steps.rightArm(55 * s, 0, 14).leftArm(-55 * s, 0, -14).rightElbow(50 + 30 * Math.max(0, -s)).leftElbow(50 + 30 * Math.max(0, s));
+		steps.hands(HandShape.FIST).move(0, 0.05F * hop(t, 0.35F), 0.035F * s);
 		EmotePose goggles = new EmotePose();
 		goggles.copyFrom(steps);
-		goggles.rightArmTo(0.34F, 0.64F, 0.72F, -40).leftArmTo(-0.34F, 0.64F, 0.72F, 40).head(-18, 0, 0).body(8, 0, 0);
+		goggles.rightHandAt(0.36F, 0.6F, 0.42F, -1, -0.35F, 0.1F).leftHandAt(-0.36F, 0.6F, 0.42F, 1, -0.35F, 0.1F).hands(HandShape.CURVED);
+		goggles.rightTwist = -40;
+		goggles.leftTwist = -40;
+		goggles.head(-18, 0, 0).body(8, 0, 0);
 		float cycle = t % 3.2F;
 		p.copyFrom(steps);
 		p.mix(goggles, ramp(cycle, 2.3F, 2.5F) * (1 - ramp(cycle, 3.0F, 3.2F)));
@@ -275,16 +287,17 @@ public final class Emotes {
 
 	private static void jumpingJacks(EmotePose p, float t) {
 		float u = (1 - Mth.cos(2 * PI * t / 1.0F)) / 2;
-		p.rightArm(0, 0, 8 + 160 * u).leftArm(0, 0, -8 - 160 * u);
+		p.rightArm(0, 0, 8 + 160 * u).leftArm(0, 0, -8 - 160 * u).elbows(12 + 14 * u).hands(HandShape.OPEN);
 		p.rightLeg(0, 0, 4 + 15 * u).leftLeg(0, 0, -4 - 15 * u);
 		p.head(-6 * u, 0, 0).move(0, 0.14F * hop(t, 0.5F), 0);
 	}
 
-	/** Elbows flapping like wings, pecking with the head, knees bobbing. */
+	/** Fists tucked into the armpits, elbows flapping like wings, pecking with the head, knees bobbing. */
 	private static void chicken(EmotePose p, float t) {
 		float flap = hop(t, 0.2F);
 		float peck = hop(t, 0.4F);
-		p.rightArm(25, 0, 25 + 40 * flap).leftArm(25, 0, -25 - 40 * flap);
+		p.rightHandAt(0.14F, -0.1F, 0.14F, -1, -0.7F + 1.1F * flap, -0.2F).leftHandAt(-0.14F, -0.1F, 0.14F, 1, -0.7F + 1.1F * flap, -0.2F);
+		p.hands(HandShape.FIST);
 		p.body(15, 0, 8 * wave(t, 1.6F)).head(10 + 15 * peck, 0, 0);
 		p.headForward = 2.5F * peck;
 		p.rightLeg(0, 0, 6).leftLeg(0, 0, -6);
@@ -292,42 +305,48 @@ public final class Emotes {
 		p.jaw = 0.5F * peck;
 	}
 
-	/** Stiff poses, snapping from one to the next. */
+	/** Stiff poses with the elbows at right angles, snapping from one to the next. */
 	private static void robot(EmotePose p, float t) {
 		p.copyFrom(sequence(t, 0.5F, 0.09F,
-			new EmotePose().rightArm(-90, 0, 0).leftArm(0, 0, -4),
-			new EmotePose().rightArm(-90, 0, 0).leftArm(-90, 0, 0).head(0, -45, 0),
-			new EmotePose().rightArm(-90, 0, 0).leftArm(0, 0, -90).head(0, 45, 0),
-			new EmotePose().rightArm(0, 0, 90).leftArm(0, 0, -90),
-			new EmotePose().rightArm(-170, 0, 0).leftArm(0, 0, -4).head(-20, 0, 0),
-			new EmotePose().rightArm(-90, 0, 0).leftArm(-90, 0, 0).body(0, 30, 0),
-			new EmotePose().rightArm(-90, 0, 0).leftArm(-90, 0, 0).body(0, -30, 0),
-			new EmotePose().rightArm(0, 0, 4).leftArm(0, 0, -4).head(15, 0, 0)));
+			new EmotePose().rightArm(-80, 0, 0).rightElbow(90).leftArm(0, 0, -4).leftElbow(8).hands(HandShape.OPEN),
+			new EmotePose().rightArm(-80, 0, 0).rightElbow(90).leftArm(-80, 0, 0).leftElbow(90).hands(HandShape.OPEN).head(0, -45, 0),
+			new EmotePose().rightArmTo(-1, 0, 0, 90).rightElbow(90).leftArmTo(1, 0, 0, -90).leftElbow(90).hands(HandShape.OPEN).head(0, 45, 0),
+			new EmotePose().rightArm(0, 0, 6).rightElbow(90).leftArm(0, 0, -6).leftElbow(90).hands(HandShape.FIST),
+			new EmotePose().rightArm(-172, 0, 0).rightElbow(4).leftArm(0, 0, -4).leftElbow(90).hands(HandShape.POINT).head(-20, 0, 0),
+			new EmotePose().rightArm(-80, 0, 0).rightElbow(90).leftArm(-80, 0, 0).leftElbow(90).hands(HandShape.OPEN).body(0, 30, 0),
+			new EmotePose().rightArm(-80, 0, 0).rightElbow(90).leftArm(-80, 0, 0).leftElbow(90).hands(HandShape.OPEN).body(0, -30, 0),
+			new EmotePose().rightArm(0, 0, 4).rightElbow(6).leftArm(0, 0, -4).leftElbow(6).hands(HandShape.OPEN).head(15, 0, 0)));
 		p.move(0, 0.015F * (1 - ramp(t % 0.5F, 0.0F, 0.12F)), 0);
 	}
 
-	/** Pointing up across the body, then down to the side, with a hand on the hip. */
+	/** Pointing up across the body, then down to the side, with the other hand on the hip. */
 	private static void disco(EmotePose p, float t) {
 		float local = t % 1.0F;
 		float up = ramp(local, 0.0F, 0.18F) * (1 - ramp(local, 0.5F, 0.68F));
-		p.rightArmTo(lerp(-0.6F, 0.5F, up), lerp(-0.6F, 1.0F, up), lerp(0.35F, 0.3F, up));
-		p.leftArmTo(0.55F, -0.7F, -0.12F);
+		p.rightArmTo(lerp(-0.6F, 0.5F, up), lerp(-0.6F, 1.0F, up), lerp(0.35F, 0.3F, up)).rightElbow(6).rightHand(HandShape.POINT);
+		p.leftHandAt(0.1F, -0.62F, 0.06F, 1, 0.15F, -0.3F);
 		p.head(-15 * up, -18 * up, 0).body(0, 0, 6 * wave(t, 1.0F)).rightLeg(-8 * up, 0, 0);
 		p.move(-0.03F * wave(t, 1.0F), 0, 0);
 	}
 
+	/** The left hand on the guitar's neck out to the side, the right one strumming at the hip. */
 	private static void airGuitar(EmotePose p, float t) {
 		float bob = hop(t, 0.5F);
-		p.leftArmTo(0.85F, 0.25F, 0.75F).rightArmTo(0.55F, -0.45F + 0.18F * wave(t, 0.125F), 0.65F);
+		p.leftHandAt(0.6F, 0.08F, 0.62F, 0.4F, -1, 0).leftHand(HandShape.GRIP);
+		p.rightHandAt(0.4F, -0.42F + 0.12F * wave(t, 0.125F), 0.4F, -1, -0.3F, 0).rightHand(HandShape.CURVED);
 		p.head(20 * bob - 5, 0, 0).body(10, -15, 0);
 		p.rightLeg(-15 * bob, 0, 8).leftLeg(0, 0, -8);
 		p.jaw = 0.3F * bob;
 	}
 
+	/** Nodding hard with both hands up making rock horns. */
 	private static void headbang(EmotePose p, float t) {
 		float nod = (1 - Mth.cos(2 * PI * t / 0.42F)) / 2;
 		p.head(40 * nod - 10, 0, 0).body(12 * nod, 0, 0);
-		p.rightArmTo(-0.25F, 0.9F - 0.3F * nod, 0.35F).leftArmTo(0.25F, 0.9F - 0.3F * nod, 0.35F);
+		float y = 0.82F - 0.22F * nod;
+		p.rightHandAt(-0.12F, y, 0.45F, -1, -0.3F, 0).leftHandAt(0.12F, y, 0.45F, 1, -0.3F, 0).hands(HandShape.HORNS);
+		p.rightTwist = -70;
+		p.leftTwist = -70;
 		p.move(0, -0.03F * nod, 0);
 		p.jaw = 0.4F * nod;
 	}
@@ -337,7 +356,8 @@ public final class Emotes {
 		float s = wave(t, 0.6F);
 		float right = Math.max(0, s);
 		float left = Math.max(0, -s);
-		p.rightArmTo(-0.15F, lerp(-0.2F, 1.0F, right), 0.55F).leftArmTo(0.15F, lerp(-0.2F, 1.0F, left), 0.55F);
+		p.rightHandAt(-0.14F, lerp(-0.22F, 0.95F, right), lerp(0.45F, 0.22F, right), -1, -0.2F, 0.1F)
+			.leftHandAt(0.14F, lerp(-0.22F, 0.95F, left), lerp(0.45F, 0.22F, left), 1, -0.2F, 0.1F).hands(HandShape.FIST);
 		p.rightLeg(-30 * left, 0, 6).leftLeg(-30 * right, 0, -6);
 		p.head(-12 * hop(t, 0.3F), 10 * s, 0).body(4, 10 * s, -5 * s).move(0.07F * s, 0.1F * hop(t, 0.3F), 0);
 		p.jaw = 0.75F * hop(t, 0.3F);
@@ -346,14 +366,18 @@ public final class Emotes {
 	/** A hand making an L on the forehead, kicking out to the sides in turns. */
 	private static void lDance(EmotePose p, float t) {
 		float k = wave(t, 0.6F);
-		p.rightArmTo(0.32F, 0.72F, 0.5F).leftArm(-30 * k, 0, -10);
+		p.rightHandAt(0.4F, 0.78F, 0.32F, -1, 0.15F, 0.25F).rightHand(HandShape.L);
+		p.rightTwist = -90;
+		p.leftArm(-30 * k, 0, -10).leftElbow(35 + 25 * k).leftHand(HandShape.FIST);
 		p.rightLeg(-10, 0, 35 * Math.max(0, k)).leftLeg(-10, 0, -35 * Math.max(0, -k));
 		p.head(-8, 0, 10 * k).body(0, 10 * k, 0).move(0, 0.07F * hop(t, 0.3F), 0);
 	}
 
 	private static void zombie(EmotePose p, float t) {
 		float s = wave(t, 1.2F);
-		p.rightArm(-88 + 5 * s, 5, 0).leftArm(-88 - 5 * s, -5, 0);
+		p.rightArm(-88 + 5 * s, 5, 0).leftArm(-88 - 5 * s, -5, 0).elbows(14 + 6 * s).hands(HandShape.CURVED);
+		p.rightTwist = -60;
+		p.leftTwist = -60;
 		p.head(12, 0, 18 * wave(t, 2.4F, 0.1F)).body(8, 0, 4 * s);
 		p.rightLeg(-10 * s, 0, 0).leftLeg(10 * s, 0, 0);
 		p.jaw = 0.4F + 0.3F * wave(t, 0.9F);
@@ -361,21 +385,27 @@ public final class Emotes {
 
 	// ------------------------------------------------------------------ gestures
 
+	/** The forearm up and the open hand rocking from side to side at the elbow. */
 	private static void wave(EmotePose p, float t) {
-		p.rightArmTo(-0.55F + 0.3F * wave(t, 0.5F), 1.0F, 0.3F).leftArmTo(0.08F, -1, 0);
+		float w = wave(t, 0.5F);
+		p.rightHandAt(-0.5F + 0.24F * w, 0.92F, 0.22F, -1, -0.45F, 0).rightHand(HandShape.OPEN);
+		p.rightTwist = 60;
+		p.leftArmTo(0.08F, -1, 0).leftElbow(10);
 		p.head(-4, -8, -6).body(0, -6, 0);
 		p.jaw = 0.15F;
 	}
 
 	/** One arm stretched up to the side, the other bent in front of the face, the head down into that elbow. */
 	private static void dab(EmotePose p, float t) {
-		p.rightArmTo(-0.85F, 0.55F, 0.15F).leftArmTo(-0.75F, 0.45F, 0.55F);
+		p.rightArmTo(-0.85F, 0.55F, 0.15F).rightElbow(4).rightHand(HandShape.OPEN);
+		p.leftHandAt(-0.85F, 0.6F, 0.42F, 0.5F, 0.2F, 1).leftHand(HandShape.FIST);
 		p.head(32, -25, -10).body(5, -10, -8);
 	}
 
 	private static void clap(EmotePose p, float t) {
 		float open = hop(t, 0.36F);
-		p.rightArmTo(0.45F - 0.6F * open, 0.15F, 1.0F).leftArmTo(-0.45F + 0.6F * open, 0.15F, 1.0F);
+		p.rightHandAt(0.5F - 0.24F * open, -0.05F, 0.55F, -1, -0.6F, 0).leftHandAt(-0.5F + 0.24F * open, -0.05F, 0.55F, 1, -0.6F, 0)
+			.hands(HandShape.OPEN);
 		p.body(-3, 0, 0).head(-5, 0, 0);
 		p.jaw = 0.2F;
 	}
@@ -391,25 +421,32 @@ public final class Emotes {
 	}
 
 	private static void salute(EmotePose p, float t) {
-		p.rightArmTo(0.38F, 0.62F, 0.42F).leftArm(0, 0, -2);
+		p.rightHandAt(0.28F, 0.7F, 0.3F, -1, 0.1F, 0.2F).rightHand(HandShape.OPEN);
+		p.rightTwist = -35;
+		p.leftArm(0, 0, -2).leftElbow(5);
 		p.head(-6, 0, 0).body(-3, 0, 0).rightLeg(0, 0, -2).leftLeg(0, 0, 2);
 	}
 
 	private static void facepalm(EmotePose p, float t) {
-		p.rightArmTo(0.42F, 0.62F, 0.72F).leftArmTo(-0.1F, -1, 0.1F);
+		p.rightHandAt(0.48F, 0.5F, 0.46F, -0.4F, -1, 0.3F).rightHand(HandShape.OPEN);
+		p.rightTwist = -30;
+		p.leftArmTo(-0.1F, -1, 0.1F).leftElbow(10);
 		p.head(28, 8 * wave(t, 0.5F), 0).body(10, 0, 0);
 	}
 
+	/** Holding the belly, shaking with laughter. */
 	private static void laugh(EmotePose p, float t) {
 		float shake = wave(t, 0.22F);
 		p.body(-14 + 4 * shake, 0, 0).head(-22, 0, 0);
-		p.rightArmTo(0.5F, -0.55F, 0.62F).leftArmTo(-0.5F, -0.55F, 0.62F);
+		p.rightHandAt(0.38F, -0.5F, 0.28F, -1, -0.2F, -0.2F).leftHandAt(-0.38F, -0.5F, 0.28F, 1, -0.2F, -0.2F).hands(HandShape.CURVED);
 		p.shoulderLift = 0.6F * shake;
 		p.jaw = 0.55F + 0.45F * shake;
 	}
 
+	/** Rubbing the eyes with both fists, sobbing. */
 	private static void cry(EmotePose p, float t) {
-		p.rightArmTo(0.45F, 0.6F, 0.75F).leftArmTo(-0.45F, 0.6F, 0.75F);
+		float rub = wave(t, 0.3F);
+		p.rightHandAt(0.4F + 0.03F * rub, 0.6F, 0.42F, -0.6F, -1, 0.2F).leftHandAt(-0.4F + 0.03F * rub, 0.6F, 0.42F, 0.6F, -1, 0.2F).hands(HandShape.FIST);
 		p.head(28, 4 * wave(t, 0.6F), 0).body(14, 0, 0);
 		p.shoulderLift = 0.7F * Math.max(0, wave(t, 0.3F));
 	}
@@ -420,22 +457,29 @@ public final class Emotes {
 		}
 	}
 
+	/** A deep bow, one hand on the chest and the other behind the back. */
 	private static void bow(EmotePose p, float t) {
 		float b = ramp(t, 0.2F, 0.7F) * (1 - ramp(t, 1.9F, 2.4F));
-		p.body(55 * b, 0, 0).head(10 * b, 0, 0);
-		p.rightArmTo(0.55F * b, lerp(-1, -0.3F, b), 0.75F * b).leftArmTo(0.25F * b, lerp(-1, -0.6F, b), -0.8F * b);
+		EmotePose bowed = new EmotePose().body(55, 0, 0).head(10, 0, 0);
+		bowed.rightHandAt(0.5F, -0.12F, 0.26F, -1, -0.6F, 0.2F).rightHand(HandShape.OPEN);
+		bowed.leftHandAt(-0.42F, -0.78F, -0.28F, 1, -0.4F, -0.4F).leftHand(HandShape.RELAXED);
+		p.mix(bowed, b);
 	}
 
+	/** The shoulders up, forearms out to the sides and palms up. */
 	private static void shrug(EmotePose p, float t) {
 		p.shoulderLift = 2.0F;
-		p.rightArmTo(-0.55F, -0.35F, 0.65F, 90).leftArmTo(0.55F, -0.35F, 0.65F, -90);
+		p.rightHandAt(-0.55F, -0.25F, 0.45F, -0.3F, -1, -0.3F).leftHandAt(0.55F, -0.25F, 0.45F, 0.3F, -1, -0.3F).hands(HandShape.OPEN);
+		p.rightTwist = 90;
+		p.leftTwist = 90;
 		p.head(0, 0, 14);
 		p.jaw = 0.15F;
 	}
 
-	/** A hand on the chin, the other arm across the belly, looking up as if wondering. */
+	/** A hand on the chin, the other arm across the belly holding up its elbow, looking up as if wondering. */
 	private static void think(EmotePose p, float t) {
-		p.rightArmTo(0.42F, 0.5F, 0.82F).leftArmTo(-0.6F, -0.15F, 0.72F);
+		p.rightHandAt(0.46F, 0.3F, 0.42F, -0.2F, -1, 0.2F).rightHand(HandShape.CURVED);
+		p.leftHandAt(-0.52F, -0.32F, 0.3F, 0.6F, -0.8F, 0.2F).leftHand(HandShape.RELAXED);
 		p.head(-12, 14, -10).body(0, 8, 0);
 		p.shoulderLift = 0.4F * Math.max(0, wave(t, 0.8F));
 	}
@@ -445,7 +489,7 @@ public final class Emotes {
 		float s = ramp(t, 0.1F, 1.6F);
 		float up = (float) Math.sin(PI * Mth.clamp((t - 0.1F) / 1.5F, 0.0F, 1.0F));
 		p.turn(720 * s, 0, 0, 0);
-		p.rightArm(0, 0, 80).leftArm(0, 0, -80).rightLeg(-25 * up, 0, 0);
+		p.rightArm(0, 0, 80).leftArm(0, 0, -80).elbows(12).hands(HandShape.OPEN).rightLeg(-25 * up, 0, 0);
 		p.head(-10, 0, 0).move(0, 0.05F * up, 0);
 	}
 
@@ -455,27 +499,30 @@ public final class Emotes {
 		}
 	}
 
+	/** Both biceps: the upper arms out to the sides, the forearms up and the fists by the head. */
 	private static void flex(EmotePose p, float t) {
-		p.rightArmTo(-0.85F, 0.65F, 0.15F).leftArmTo(0.85F, 0.65F, 0.15F);
-		p.shoulderLift = hop(t, 0.8F);
+		float squeeze = hop(t, 0.8F);
+		p.rightHandAt(-0.42F, 0.5F - 0.06F * squeeze, 0.08F, -1, -0.2F, 0).leftHandAt(0.42F, 0.5F - 0.06F * squeeze, 0.08F, 1, -0.2F, 0)
+			.hands(HandShape.FIST);
+		p.shoulderLift = squeeze;
 		p.head(-5, 25 * wave(t, 1.6F), 0).body(-6, 0, 0).rightLeg(0, 0, 8).leftLeg(0, 0, -8);
 	}
 
 	/**
-	 * Lying face down and pushing up and down. The whole body turns around the feet; the arms keep pointing at the ground,
-	 * leaning toward the feet when the body is low so that the hands stay down.
+	 * Lying face down and pushing up and down. The whole body turns around the feet; the hands stay on the ground under
+	 * the shoulders, so the elbows bend when the body goes down.
 	 */
 	private static void pushUps(EmotePose p, float t) {
 		float lie = ramp(t, 0.0F, 0.6F);
 		float up = (1 - Mth.cos(2 * PI * t / 1.2F)) / 2;
-		float pitch = lerp(64, 52, up) * lie;
+		float pitch = lerp(66, 52, up) * lie;
 		p.turn(0, pitch, 0, 0);
 		double theta = Math.toRadians(pitch);
-		double shoulder = 1.3 * Math.cos(theta);
-		double alpha = Math.acos(Math.min(1.0, shoulder / 0.7));
-		float upInBody = (float) -Math.cos(alpha - theta);
-		float forwardInBody = (float) Math.sin(theta - alpha);
-		p.rightArmTo(-0.12F, upInBody, forwardInBody).leftArmTo(0.12F, upInBody, forwardInBody);
+		// How high the shoulders are above the ground, in arm lengths, and which way the ground is from them.
+		float reach = (float) (1.3 * Math.cos(theta) / 0.7);
+		float down = (float) -Math.cos(theta);
+		float ahead = (float) Math.sin(theta);
+		p.rightHandAt(-0.14F, down * reach, ahead * reach, -0.6F, -1, 0).leftHandAt(0.14F, down * reach, ahead * reach, 0.6F, -1, 0).hands(HandShape.OPEN);
 		p.head(-35 * lie, 0, 0);
 	}
 
@@ -484,12 +531,15 @@ public final class Emotes {
 		float sit = ramp(t, 0.0F, 0.5F);
 		p.hipDrop = sit;
 		p.rightLeg(-88 * sit, 6 * sit, 0).leftLeg(-88 * sit, -6 * sit, 0);
-		p.rightArmTo(-0.2F * sit, -1, -0.75F * sit).leftArmTo(0.2F * sit, -1, -0.75F * sit);
+		p.rightArmTo(-0.2F * sit, -1, -0.75F * sit).leftArmTo(0.2F * sit, -1, -0.75F * sit).elbows(8 * sit).hands(HandShape.OPEN);
 		p.body(-12 * sit, 0, 0).head(-5, 25 * wave(t, 6.0F) * sit, 0);
 	}
 
+	/** Both hands in front of the chest, fingers curved into the shape of a heart. */
 	private static void heart(EmotePose p, float t) {
-		p.rightArmTo(0.32F, 1, 0.22F).leftArmTo(-0.32F, 1, 0.22F);
+		p.rightHandAt(0.46F, 0.02F, 0.55F, -1, -0.6F, 0).leftHandAt(-0.46F, 0.02F, 0.55F, 1, -0.6F, 0).hands(HandShape.CURVED);
+		p.rightTwist = -60;
+		p.leftTwist = -60;
 		p.head(-12, 0, 8 * wave(t, 1.5F)).body(-4, 0, 4 * wave(t, 1.5F));
 	}
 
@@ -499,13 +549,17 @@ public final class Emotes {
 		}
 	}
 
-	/** A hand to the mouth, then out toward whoever is in front. */
+	/** Fingertips to the mouth, then the hand opens out toward whoever is in front. */
 	private static void kiss(EmotePose p, float t) {
 		float k = ramp(t, 0.15F, 0.5F);
 		float out = ramp(t, 0.8F, 1.1F);
-		p.rightArmTo(lerp(0.38F, -0.1F, out) * k, lerp(-1, lerp(0.55F, 0.35F, out), k), lerp(0, lerp(0.78F, 1.0F, out), k));
-		p.leftArm(0, 0, -3).head(-4 + 6 * k * (1 - out), 0, 12 * k * (1 - out));
-		p.jaw = 0.2F * k * (1 - out);
+		EmotePose mouth = new EmotePose().rightHandAt(0.48F, 0.4F, 0.42F, -0.5F, -1, 0.3F).rightHand(HandShape.CURVED);
+		mouth.rightTwist = -40;
+		mouth.leftArm(0, 0, -3).head(2, 0, 12);
+		mouth.jaw = 0.2F;
+		EmotePose blow = new EmotePose().rightArmTo(-0.1F, 0.35F, 1.0F).rightElbow(14, 90).rightHand(HandShape.OPEN).leftArm(0, 0, -3).head(-4, 0, 0);
+		p.mix(mouth, k);
+		p.mix(blow, out);
 	}
 
 	private static void kissHeart(Player player, int age, float height) {
@@ -516,7 +570,7 @@ public final class Emotes {
 
 	private static void cheer(EmotePose p, float t) {
 		float v = hop(t, 0.75F);
-		p.rightArmTo(-0.45F, 1, 0.12F + 0.2F * v).leftArmTo(0.45F, 1, 0.12F + 0.2F * v);
+		p.rightArmTo(-0.45F, 1, 0.12F + 0.2F * v).leftArmTo(0.45F, 1, 0.12F + 0.2F * v).elbows(38 - 24 * v).hands(HandShape.FIST);
 		p.head(-15, 0, 0).move(0, 0.2F * v, 0);
 		p.jaw = 0.7F;
 	}

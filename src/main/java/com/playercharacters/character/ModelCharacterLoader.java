@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.playercharacters.PlayerCharactersClient;
+import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
@@ -11,11 +12,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
@@ -31,7 +35,9 @@ import org.jspecify.annotations.Nullable;
  *       "calm_&lt;part&gt;" only while it isn't, and "middle_finger" replaces the right arm during the gesture.
  *       "blink_&lt;part&gt;" (closed eyelids) is shown for a moment every few seconds. "glow_&lt;part&gt;" glows in
  *       the dark. Objects whose name starts with "tail" sway by themselves ("glow_tail..." glows and sways with them).
- *       "fp_right_arm", "fp_left_arm" and "fp_middle_finger" are more detailed arms, only drawn in first person.</li>
+ *       "fp_right_arm", "fp_left_arm" and "fp_middle_finger" are more detailed arms, only drawn in first person.
+ *       Fingers that curl are objects of their own: "right_thumb", "right_index", "right_middle", "right_ring" and
+ *       "right_little" (and "left_..."), with "fp_right_index" and so on for first person. Arms bend at their elbow.</li>
  *   <li>{@code texture.png} - optional texture. Without it, the model uses its vertex colors.</li>
  *   <li>{@code character.json} - optional settings: name, size, height, turn, jaw_angle, butt, waddle, head_turn,
  *       smoke, bounce, stance, arms, hide_held_items, particles and pivots.</li>
@@ -99,10 +105,16 @@ final class ModelCharacterLoader {
 		TAIL_GLOW,
 		FIRST_PERSON_RIGHT,
 		FIRST_PERSON_LEFT,
-		FIRST_PERSON_FINGER
+		FIRST_PERSON_FINGER,
+		/** A finger that can curl ("right_index"), and its first-person version ("fp_right_index"). */
+		HAND_FINGER,
+		FIRST_PERSON_HAND_FINGER,
+		/** Something held in a hand ("right_hand", like the queen's rifle): it moves with the hand, past the elbow. */
+		HAND,
+		FIRST_PERSON_HAND
 	}
 
-	/** @param tail for tails: the tail's name (without "glow_") */
+	/** @param tail for tails: the tail's name (without "glow_"); for fingers: the finger's name ("right_index") */
 	private record Slot(Kind kind, CharacterModel.Bone bone, String tail) {
 		Slot(Kind kind, CharacterModel.Bone bone) {
 			this(kind, bone, "");
@@ -113,7 +125,23 @@ final class ModelCharacterLoader {
 	private static final class PartOptions {
 		float @Nullable [] pivot;
 		float @Nullable [] hand;
+		/** Arms: the elbow joint, and where the forearm ends (the wrist). */
+		float @Nullable [] elbow;
+		float @Nullable [] wrist;
+		/** Fingers: where the finger ends, and which way its tip goes when it curls (toward the palm). */
+		float @Nullable [] tip;
+		float @Nullable [] curl;
+		/** Fingers: where it bends (fractions of its length from the knuckle), and how far each joint bends in a fist (degrees). */
+		float @Nullable [] joints;
+		float @Nullable [] angles;
+		/** Fingers: bends sharply at its joints, like a robot's. */
+		@Nullable Boolean rigid;
 	}
+
+	/** Finger objects: "right_index", "left_thumb", "fp_right_middle" and so on. */
+	private static final Pattern FINGER = Pattern.compile("^(fp_|first_person_)?(right|left)_(thumb|index|middle|ring|little|pinky)(_finger)?$");
+	/** Objects held in a hand: "right_hand", "fp_left_hand". */
+	private static final Pattern HAND_OBJECT = Pattern.compile("^(fp_|first_person_)?(right|left)_hand$");
 
 	static boolean isModelFolder(Path folder) {
 		return Files.isRegularFile(folder.resolve(MODEL_FILE));
@@ -259,6 +287,9 @@ final class ModelCharacterLoader {
 		Map<CharacterModel.Bone, CharacterModel.Part> glow = new EnumMap<>(CharacterModel.Bone.class);
 		Map<String, List<Obj.Face>> tailFaces = new LinkedHashMap<>();
 		Map<String, List<Obj.Face>> tailGlowFaces = new LinkedHashMap<>();
+		// Fingers and held things by name ("right_index", "right_hand"), in third person and in first person.
+		Map<String, List<Obj.Face>> handFaces = new LinkedHashMap<>();
+		Map<String, List<Obj.Face>> fpHandFaces = new LinkedHashMap<>();
 		CharacterModel.Part middleFinger = null;
 		CharacterModel.Part fpRight = null;
 		CharacterModel.Part fpLeft = null;
@@ -275,6 +306,14 @@ final class ModelCharacterLoader {
 				}
 				case TAIL_GLOW -> {
 					tailGlowFaces.computeIfAbsent(slot.tail(), k -> new ArrayList<>()).addAll(entry.getValue());
+					continue;
+				}
+				case HAND_FINGER, HAND -> {
+					handFaces.computeIfAbsent(slot.tail(), k -> new ArrayList<>()).addAll(entry.getValue());
+					continue;
+				}
+				case FIRST_PERSON_HAND_FINGER, FIRST_PERSON_HAND -> {
+					fpHandFaces.computeIfAbsent(slot.tail(), k -> new ArrayList<>()).addAll(entry.getValue());
 					continue;
 				}
 				default -> {
@@ -306,14 +345,20 @@ final class ModelCharacterLoader {
 			? CharacterModel.Stance.FOUR_LEGS : CharacterModel.Stance.TWO_LEGS;
 		CharacterModel.Arms arms = "rifle".equalsIgnoreCase(options.arms) ? CharacterModel.Arms.RIFLE : CharacterModel.Arms.NORMAL;
 		List<CharacterModel.Emitter> emitters = emitters(options, tails, t, id, problems);
+		CharacterModel.ArmRig rightRig = armRig(obj, options, parts, CharacterModel.Bone.RIGHT_ARM, handFaces, fpHandFaces, t);
+		CharacterModel.ArmRig leftRig = armRig(obj, options, parts, CharacterModel.Bone.LEFT_ARM, handFaces, fpHandFaces, t);
+		for (String orphan : handFaces.keySet()) {
+			problems.add(id + "/model.obj: \"" + orphan + "\" has no arm to belong to");
+		}
 		CharacterModel.Extras extras = new CharacterModel.Extras(mad, calm, middleFinger, (float) Math.toRadians(waddle), headTurn, smoke, blink, bounce,
 			glow, List.copyOf(tails.values()), stance, arms, Boolean.TRUE.equals(options.hide_held_items),
-			new CharacterModel.FirstPerson(fpRight, fpLeft, fpFinger), emitters);
+			new CharacterModel.FirstPerson(fpRight, fpLeft, fpFinger), emitters, rightRig, leftRig);
 		return new CharacterModel(parts, texture, (float) Math.toRadians(jawDegrees), hip, butt, height * scale, extras);
 	}
 
 	private static boolean isFirstPerson(Kind kind) {
-		return kind == Kind.FIRST_PERSON_RIGHT || kind == Kind.FIRST_PERSON_LEFT || kind == Kind.FIRST_PERSON_FINGER;
+		return kind == Kind.FIRST_PERSON_RIGHT || kind == Kind.FIRST_PERSON_LEFT || kind == Kind.FIRST_PERSON_FINGER || kind == Kind.FIRST_PERSON_HAND_FINGER
+			|| kind == Kind.FIRST_PERSON_HAND;
 	}
 
 	/**
@@ -353,6 +398,127 @@ final class ModelCharacterLoader {
 			problems.add(id + "/model.obj: \"glow_" + orphan + "\" has no tail called \"" + orphan + "\"");
 		}
 		return tails;
+	}
+
+	/**
+	 * How an arm bends: at its elbow (from character.json, or about halfway down the arm), and with its fingers if it has
+	 * finger objects. Null when the model has no such arm.
+	 */
+	private static CharacterModel.@Nullable ArmRig armRig(Obj obj, Options options, Map<CharacterModel.Bone, CharacterModel.Part> parts,
+		CharacterModel.Bone arm, Map<String, List<Obj.Face>> handFaces, Map<String, List<Obj.Face>> fpHandFaces, Transform t) {
+		CharacterModel.Part part = parts.get(arm);
+		if (part == null || part.vertexCount() == 0) {
+			return null;
+		}
+		String side = arm == CharacterModel.Bone.RIGHT_ARM ? "right" : "left";
+		PartOptions armOptions = partOptions(options, arm);
+		Vector3f shoulder = new Vector3f(part.pivot());
+		Vector3f far = farthest(part, shoulder);
+		Vector3f elbow = point(armOptions == null ? null : armOptions.elbow, t, new Vector3f(shoulder).lerp(far, 0.47F));
+		Vector3f wrist = point(armOptions == null ? null : armOptions.wrist, t, new Vector3f(shoulder).lerp(far, 0.82F));
+		Vector3f along = new Vector3f(wrist).sub(shoulder);
+		along = along.lengthSquared() < 1.0E-8F ? new Vector3f(0.0F, 1.0F, 0.0F) : along.normalize();
+		// Bending forward: the forearm turns toward the front (-Z) around an axis across the arm.
+		Vector3f hinge = new Vector3f(along).cross(0.0F, 0.0F, -1.0F);
+		if (hinge.lengthSquared() < 0.04F) {
+			hinge.set(-1.0F, 0.0F, 0.0F).sub(new Vector3f(along).mul(-along.x));
+		}
+		hinge.normalize();
+
+		List<CharacterModel.Finger> fingers = new ArrayList<>();
+		for (CharacterModel.FingerRole role : CharacterModel.FingerRole.values()) {
+			String name = side + "_" + role.name().toLowerCase(Locale.ROOT);
+			List<Obj.Face> faces = handFaces.remove(name);
+			List<Obj.Face> fpFaces = fpHandFaces.remove(name);
+			if (faces == null && fpFaces == null) {
+				continue;
+			}
+			CharacterModel.Part fingerPart = faces == null ? new CharacterModel.Part(new float[0], new int[0], shoulder, null)
+				: buildPart(obj, faces, arm, null, t).withPivot(shoulder);
+			CharacterModel.Part fpPart = fpFaces == null ? null : buildPart(obj, fpFaces, arm, null, t).withPivot(shoulder);
+			CharacterModel.Part shape = faces != null ? fingerPart : fpPart;
+			PartOptions fingerOptions = options.parts == null ? null
+				: options.parts.getOrDefault(name, role == CharacterModel.FingerRole.LITTLE ? options.parts.get(side + "_pinky") : null);
+			Vector3f base = point(fingerOptions == null ? null : fingerOptions.pivot, t, nearest(shape, wrist));
+			Vector3f tip = point(fingerOptions == null ? null : fingerOptions.tip, t, farthest(shape, base));
+			Vector3f axis = new Vector3f(tip).sub(base);
+			float length = axis.length();
+			axis = length < 1.0E-4F ? new Vector3f(along) : axis.div(length);
+			boolean thumb = role == CharacterModel.FingerRole.THUMB;
+			float inward = arm == CharacterModel.Bone.RIGHT_ARM ? 1.0F : -1.0F; // toward the body, where a hanging hand's palm faces
+			Vector3f curl = fingerOptions != null && fingerOptions.curl != null && fingerOptions.curl.length == 3
+				? t.direction(fingerOptions.curl[0], fingerOptions.curl[1], fingerOptions.curl[2])
+				: new Vector3f(inward, 0.0F, thumb ? 1.0F : 0.0F).normalize();
+			curl.sub(new Vector3f(axis).mul(curl.dot(axis)));
+			if (curl.lengthSquared() < 1.0E-6F) {
+				curl.set(hinge).cross(axis);
+			}
+			curl.normalize();
+			Vector3f bend = new Vector3f(axis).cross(curl).normalize();
+			float[] joints = thumb ? new float[] {0.0F, 0.5F} : new float[] {0.0F, 0.44F, 0.74F};
+			float[] angles = thumb ? new float[] {40.0F, 55.0F} : new float[] {75.0F, 95.0F, 65.0F};
+			if (fingerOptions != null && fingerOptions.joints != null && fingerOptions.joints.length >= 1 && fingerOptions.joints.length <= 6) {
+				joints = fingerOptions.joints.clone();
+				float[] given = fingerOptions.angles != null && fingerOptions.angles.length == joints.length ? fingerOptions.angles : null;
+				angles = new float[joints.length];
+				for (int i = 0; i < joints.length; i++) {
+					joints[i] = Math.max(0.0F, Math.min(1.0F, joints[i]));
+					angles[i] = given != null ? given[i] : 240.0F / joints.length;
+				}
+			} else if (fingerOptions != null && fingerOptions.angles != null && fingerOptions.angles.length == joints.length) {
+				angles = fingerOptions.angles.clone();
+			}
+			for (int i = 0; i < angles.length; i++) {
+				angles[i] = (float) Math.toRadians(Math.max(-90.0F, Math.min(180.0F, angles[i])));
+			}
+			fingers.add(new CharacterModel.Finger(role, fingerPart, fpPart, base, axis, Math.max(length, 1.0E-4F), bend, joints, angles,
+				fingerOptions != null && Boolean.TRUE.equals(fingerOptions.rigid)));
+		}
+		List<Obj.Face> heldFaces = handFaces.remove(side + "_hand");
+		List<Obj.Face> heldGlowFaces = handFaces.remove("glow_" + side + "_hand");
+		List<Obj.Face> fpHeldFaces = fpHandFaces.remove(side + "_hand");
+		CharacterModel.Part held = heldFaces == null ? null : buildPart(obj, heldFaces, arm, null, t).withPivot(shoulder);
+		CharacterModel.Part heldGlow = heldGlowFaces == null ? null : buildPart(obj, heldGlowFaces, arm, null, t).withPivot(shoulder);
+		CharacterModel.Part fpHeld = fpHeldFaces == null ? null : buildPart(obj, fpHeldFaces, arm, null, t).withPivot(shoulder);
+		return new CharacterModel.ArmRig(shoulder, elbow, wrist, hinge, elbowBlend(part, elbow, along), fingers, held, heldGlow, fpHeld);
+	}
+
+	private static Vector3f point(float @Nullable [] given, Transform t, Vector3f otherwise) {
+		return given != null && given.length == 3 ? t.point(given[0], given[1], given[2]) : otherwise;
+	}
+
+	/** How softly the arm bends: a bit more than half its thickness at the elbow, on each side. */
+	private static float elbowBlend(CharacterModel.Part part, Vector3f elbow, Vector3f along) {
+		float[] v = part.vertices();
+		FloatArrayList radii = new FloatArrayList();
+		Vector3f d = new Vector3f();
+		for (int o = 0; o < v.length; o += 8) {
+			d.set(v[o], v[o + 1], v[o + 2]).sub(elbow);
+			float s = d.dot(along);
+			if (Math.abs(s) < 0.03F) {
+				radii.add(d.sub(along.x * s, along.y * s, along.z * s).length());
+			}
+		}
+		if (radii.isEmpty()) {
+			return 0.02F;
+		}
+		float[] sorted = radii.toFloatArray();
+		Arrays.sort(sorted);
+		return Math.max(0.006F, Math.min(0.08F, sorted[sorted.length / 2] * 0.6F));
+	}
+
+	private static Vector3f farthest(CharacterModel.Part part, Vector3f from) {
+		Vector3f best = new Vector3f(from);
+		float bestDistance = -1.0F;
+		float[] v = part.vertices();
+		for (int o = 0; o < v.length; o += 8) {
+			float d = from.distanceSquared(v[o], v[o + 1], v[o + 2]);
+			if (d > bestDistance) {
+				bestDistance = d;
+				best.set(v[o], v[o + 1], v[o + 2]);
+			}
+		}
+		return best;
 	}
 
 	private static Vector3f nearest(CharacterModel.Part part, Vector3f to) {
@@ -424,6 +590,21 @@ final class ModelCharacterLoader {
 
 	static Slot slotFor(String group) {
 		String name = normalize(group);
+		Matcher finger = FINGER.matcher(name);
+		if (finger.matches()) {
+			String role = finger.group(3).equals("pinky") ? "little" : finger.group(3);
+			String id = finger.group(2) + "_" + role;
+			CharacterModel.Bone arm = finger.group(2).equals("right") ? CharacterModel.Bone.RIGHT_ARM : CharacterModel.Bone.LEFT_ARM;
+			return new Slot(finger.group(1) != null ? Kind.FIRST_PERSON_HAND_FINGER : Kind.HAND_FINGER, arm, id);
+		}
+		Matcher hand = HAND_OBJECT.matcher(name.startsWith("glow_") ? name.substring(5) : name);
+		if (hand.matches()) {
+			CharacterModel.Bone arm = hand.group(2).equals("right") ? CharacterModel.Bone.RIGHT_ARM : CharacterModel.Bone.LEFT_ARM;
+			if (name.startsWith("glow_")) {
+				return new Slot(Kind.HAND, arm, "glow_" + hand.group(2) + "_hand");
+			}
+			return new Slot(hand.group(1) != null ? Kind.FIRST_PERSON_HAND : Kind.HAND, arm, hand.group(2) + "_hand");
+		}
 		if (name.startsWith("fp_") || name.startsWith("first_person_")) {
 			String rest = name.substring(name.startsWith("fp_") ? 3 : 13);
 			if (rest.startsWith("middle_finger")) {

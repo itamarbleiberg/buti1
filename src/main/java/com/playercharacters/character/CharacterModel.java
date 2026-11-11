@@ -104,6 +104,71 @@ public final class CharacterModel {
 		public static final FirstPerson NONE = new FirstPerson(null, null, null);
 	}
 
+	/** Which finger a finger is. Hands with fewer fingers leave some out (a cartoon hand has no ring finger). */
+	public enum FingerRole {
+		THUMB,
+		INDEX,
+		MIDDLE,
+		RING,
+		LITTLE
+	}
+
+	/**
+	 * A finger: its own polygons, which curl toward the palm at three joints (two for a thumb). Everything in model space.
+	 *
+	 * @param role        which finger it is
+	 * @param part        its polygons in third person
+	 * @param firstPerson its more detailed polygons in first person, or null
+	 * @param base        the knuckle it grows from
+	 * @param axis        unit direction from the knuckle to the tip
+	 * @param length      from the knuckle to the tip
+	 * @param bend        unit axis it curls around: turning it by a positive angle moves the tip toward the palm
+	 * @param joints      where it bends, as fractions of its length from the knuckle (the first is 0, the knuckle)
+	 * @param angles      how far each joint bends when the finger is fully curled, in radians
+	 * @param rigid       true for mechanical fingers, which bend sharply at their joints instead of smoothly
+	 */
+	public record Finger(FingerRole role, Part part, @Nullable Part firstPerson, Vector3f base, Vector3f axis, float length, Vector3f bend, float[] joints,
+		float[] angles, boolean rigid) {
+		public Finger withParts(Part newPart, @Nullable Part newFirstPerson) {
+			return new Finger(this.role, newPart, newFirstPerson, this.base, this.axis, this.length, this.bend, this.joints, this.angles, this.rigid);
+		}
+	}
+
+	/**
+	 * How an arm bends: at its elbow, and with fingers that curl. Every 3D character has one for each arm; without
+	 * settings in character.json the elbow is guessed halfway down the arm. Everything in model space.
+	 *
+	 * @param shoulder the arm's joint (its part's pivot)
+	 * @param elbow    the elbow joint
+	 * @param wrist    where the forearm meets the hand (the forearm twists between the elbow and here)
+	 * @param hinge    unit axis of the elbow: turning the forearm around it by a positive angle bends the arm forward
+	 * @param blend    blocks on each side of the elbow over which the arm's surface bends smoothly
+	 * @param fingers  fingers that curl, maybe none
+	 * @param held     something held in the hand that moves with it as a whole (the queen's rifle), or null
+	 * @param heldGlow glowing bits of it (the rifle scope's lens), or null
+	 * @param heldFirstPerson its more detailed version for first person, or null
+	 */
+	public record ArmRig(Vector3f shoulder, Vector3f elbow, Vector3f wrist, Vector3f hinge, float blend, List<Finger> fingers, @Nullable Part held,
+		@Nullable Part heldGlow, @Nullable Part heldFirstPerson) {
+		public ArmRig {
+			fingers = List.copyOf(fingers);
+		}
+
+		public @Nullable Finger finger(FingerRole role) {
+			for (Finger finger : this.fingers) {
+				if (finger.role() == role) {
+					return finger;
+				}
+			}
+			return null;
+		}
+
+		/** The same joints with these fingers and held thing (for the simpler copies drawn far away). */
+		public ArmRig withParts(List<Finger> newFingers, @Nullable Part newHeld, @Nullable Part newHeldGlow) {
+			return new ArmRig(this.shoulder, this.elbow, this.wrist, this.hinge, this.blend, newFingers, newHeld, newHeldGlow, null);
+		}
+	}
+
 	/**
 	 * Extras for the middle finger emote and other options, all optional.
 	 *
@@ -122,12 +187,14 @@ public final class CharacterModel {
 	 * @param hideHeldItems  whether items in the hands are left out (the hands are already holding something)
 	 * @param firstPerson    detailed arms for first person
 	 * @param particles      particles that keep coming out of it
+	 * @param rightRig       how the right arm bends (elbow and fingers), or null for a stiff arm
+	 * @param leftRig        how the left arm bends, or null
 	 */
 	public record Extras(Map<Bone, Part> madParts, Map<Bone, Part> calmParts, @Nullable Part middleFinger, float waddleRadians, float headTurn,
 		@Nullable Vector3f smoke, Map<Bone, Part> blinkParts, float bounce, Map<Bone, Part> glowParts, List<Tail> tails, Stance stance, Arms arms,
-		boolean hideHeldItems, FirstPerson firstPerson, List<Emitter> particles) {
+		boolean hideHeldItems, FirstPerson firstPerson, List<Emitter> particles, @Nullable ArmRig rightRig, @Nullable ArmRig leftRig) {
 		public static final Extras NONE = new Extras(Map.of(), Map.of(), null, 0.0F, 1.0F, null, Map.of(), 0.0F, Map.of(), List.of(), Stance.TWO_LEGS,
-			Arms.NORMAL, false, FirstPerson.NONE, List.of());
+			Arms.NORMAL, false, FirstPerson.NONE, List.of(), null, null);
 
 		public Extras {
 			madParts = madParts.isEmpty() ? Map.of() : new EnumMap<>(madParts);
@@ -140,6 +207,24 @@ public final class CharacterModel {
 
 		public boolean fourLegs() {
 			return this.stance == Stance.FOUR_LEGS;
+		}
+
+		public @Nullable ArmRig rig(Bone arm) {
+			return arm == Bone.RIGHT_ARM ? this.rightRig : arm == Bone.LEFT_ARM ? this.leftRig : null;
+		}
+
+		/** Whether a hand has fingers that curl. */
+		public boolean hasFingers(Bone arm) {
+			ArmRig rig = this.rig(arm);
+			return rig != null && !rig.fingers().isEmpty();
+		}
+
+		/**
+		 * Whether the middle finger is made with the right hand's own fingers. A model that has an arm made for the
+		 * gesture ("middle_finger") uses that instead.
+		 */
+		public boolean fingerGesture() {
+			return this.middleFinger == null && this.hasFingers(Bone.RIGHT_ARM);
 		}
 	}
 
@@ -213,8 +298,20 @@ public final class CharacterModel {
 		Extras extras = new Extras(simplify(e.madParts(), cell), simplify(e.calmParts(), cell),
 			e.middleFinger() == null ? null : ModelDetail.simplify(e.middleFinger(), cell), e.waddleRadians(), e.headTurn(), e.smoke(),
 			simplify(e.blinkParts(), cell), e.bounce(), simplify(e.glowParts(), cell), tails, e.stance(), e.arms(), e.hideHeldItems(), FirstPerson.NONE,
-			e.particles());
+			e.particles(), simplify(e.rightRig(), cell), simplify(e.leftRig(), cell));
 		return new CharacterModel(parts, this.texture, this.jawOpenRadians, this.hip, this.butt, this.height, extras);
+	}
+
+	private static @Nullable ArmRig simplify(@Nullable ArmRig rig, float cell) {
+		if (rig == null) {
+			return null;
+		}
+		List<Finger> fingers = new ArrayList<>();
+		for (Finger finger : rig.fingers()) {
+			fingers.add(finger.withParts(ModelDetail.simplify(finger.part(), cell), null));
+		}
+		return rig.withParts(fingers, rig.held() == null ? null : ModelDetail.simplify(rig.held(), cell),
+			rig.heldGlow() == null ? null : ModelDetail.simplify(rig.heldGlow(), cell));
 	}
 
 	private static Map<Bone, Part> simplify(Map<Bone, Part> parts, float cell) {
@@ -263,6 +360,19 @@ public final class CharacterModel {
 		}
 		if (this.extras.middleFinger() != null) {
 			quads += this.extras.middleFinger().vertexCount() / 4;
+		}
+		for (ArmRig rig : new ArmRig[] {this.extras.rightRig(), this.extras.leftRig()}) {
+			if (rig != null) {
+				for (Finger finger : rig.fingers()) {
+					quads += finger.part().vertexCount() / 4;
+				}
+				if (rig.held() != null) {
+					quads += rig.held().vertexCount() / 4;
+				}
+				if (rig.heldGlow() != null) {
+					quads += rig.heldGlow().vertexCount() / 4;
+				}
+			}
 		}
 		return quads;
 	}

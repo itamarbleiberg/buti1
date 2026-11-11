@@ -5,6 +5,7 @@ import com.playercharacters.character.CharacterModel.Bone;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.playercharacters.emote.EmotePose;
+import com.playercharacters.emote.HandShape;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.player.PlayerModel;
@@ -99,13 +100,68 @@ public final class CharacterPoses {
 		model.leftArm.setRotation(-Mth.HALF_PI + pitch + 0.08F, yaw + 0.62F, 0.0F);
 	}
 
-	/** Raises the right arm toward the front. {@code raise} goes from 0 (down) to about 1. */
-	public static void middleFinger(PlayerModel model, float raise, float ageInTicks) {
+	/**
+	 * Raises the right arm toward the front. {@code raise} goes from 0 (down) to about 1. A hand with fingers makes the
+	 * gesture itself: the upper arm goes forward and the forearm up, the back of the hand toward whoever is in front (see
+	 * {@link #arms}). Other arms point straight forward with a finger modeled pointing up.
+	 */
+	public static void middleFinger(PlayerModel model, float raise, float ageInTicks, boolean ownHand) {
 		ModelPart arm = model.rightArm;
 		float shake = 0.035F * (float) Math.sin(ageInTicks * 1.7F);
-		arm.xRot += (FINGER_ARM_PITCH + shake - arm.xRot) * raise;
-		arm.yRot += (FINGER_ARM_YAW - arm.yRot) * raise;
+		arm.xRot += ((ownHand ? GESTURE_ARM_PITCH : FINGER_ARM_PITCH) + shake - arm.xRot) * raise;
+		// A hand held up from a bent elbow goes a little out to the side, so it is next to the face rather than in front of it.
+		arm.yRot += ((ownHand ? GESTURE_ARM_YAW : FINGER_ARM_YAW) - arm.yRot) * raise;
 		arm.zRot -= arm.zRot * raise;
+	}
+
+	/**
+	 * The middle finger made with a hand's own fingers: the upper arm forward a little below the shoulder, the forearm
+	 * standing up from the elbow (bend, degrees), turned (degrees) so the back of the hand faces whoever is in front.
+	 */
+	private static final float GESTURE_ARM_PITCH = -1.4F;
+	private static final float GESTURE_ARM_YAW = 0.3F;
+	private static final float GESTURE_ELBOW = 92.0F;
+	private static final float GESTURE_TWIST = 90.0F;
+
+	/**
+	 * Works out this frame's elbows and fingers: holding an item closes the hand around it, emotes bend the arms and shape
+	 * the hands, and the middle finger is made with the hand's own fingers where it has them. Arms that can't bend (the
+	 * normal player model's) point to where the bent arm would have its hand instead.
+	 */
+	public static void arms(PlayerModel model, AvatarRenderState state, @Nullable CharacterModel character) {
+		CharacterRenderState characterState = (CharacterRenderState) state;
+		EmotePose emote = characterState.playercharacters$emote();
+		float raise = characterState.playercharacters$middleFinger();
+		for (int side = 0; side < 2; side++) {
+			boolean right = side == 0;
+			Bone bone = right ? Bone.RIGHT_ARM : Bone.LEFT_ARM;
+			ArmPose pose = characterState.playercharacters$arm(right);
+			pose.reset();
+			if (!(right ? state.rightHandItemState : state.leftHandItemState).isEmpty()) {
+				pose.shape(HandShape.GRIP, 1.0F);
+			}
+			if (emote != null && emote.weight > 0.0F) {
+				pose.blend(right ? emote.rightElbow : emote.leftElbow, right ? emote.rightTwist : emote.leftTwist, right ? emote.rightHand : emote.leftHand,
+					emote.weight);
+			}
+			if (right && raise > 0.0F && character != null && character.extras().fingerGesture()) {
+				pose.blend(GESTURE_ELBOW, GESTURE_TWIST, HandShape.MIDDLE_FINGER, raise);
+			}
+			if (character == null && pose.bend != 0.0F && VanillaArms.canBend(state, right)) {
+				// Minecraft's own model: the arm is drawn again bent at the elbow (see VanillaArms), without the forearm's twist.
+				VanillaArms.hide(right ? model.rightArm : model.leftArm);
+				pose.twist = 0.0F;
+			} else if ((character == null || character.extras().rig(bone) == null) && pose.bend != 0.0F) {
+				(right ? model.rightArm : model.leftArm).xRot -= straightened(pose.bend);
+				pose.bend = 0.0F;
+				pose.twist = 0.0F;
+			}
+		}
+	}
+
+	/** How much further forward a straight arm turns to point where an arm bent this far (radians) has its hand. */
+	public static float straightened(float bend) {
+		return (float) Math.atan2(EmotePose.FOREARM * Math.sin(bend), EmotePose.UPPER_ARM + EmotePose.FOREARM * Math.cos(bend));
 	}
 
 	/**
